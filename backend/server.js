@@ -17,8 +17,9 @@ const corsOptions = {
   origin: [
     'http://localhost:9999',
     'http://127.0.0.1:9999',
-    'http://cbc.cedricbwang.cloud:9999',
-    'https://cbc.cedricbwang.cloud:9999'
+    'http://video.werookies.com:9999',
+    'https://video.werookies.com:9999',
+    'http://43.132.153.123:9999'
   ],
   credentials: true,
   optionsSuccessStatus: 200
@@ -136,21 +137,45 @@ app.post('/api/video/create', async (req, res) => {
   try {
     console.log('创建视频生成任务:', JSON.stringify(req.body, null, 2));
 
+    // 对 FileInfos 中的私有 COS URL 替换为预签名 URL（VOD 需要能公开访问文件）
+    let fileInfos = req.body.FileInfos;
+    if (fileInfos && fileInfos.length > 0) {
+      fileInfos = await Promise.all(
+        fileInfos.map(async (fileInfo) => {
+          if (fileInfo.Type === 'Url' && fileInfo.Url) {
+            // 从 URL 中提取 COS key
+            const urlObj = new URL(fileInfo.Url);
+            const key = decodeURIComponent(urlObj.pathname.replace(/^\//, ''));
+            const signedUrl = await cosService.getSignedUrl(key, 3600);
+            return { ...fileInfo, Url: signedUrl };
+          }
+          return fileInfo;
+        })
+      );
+      console.log('已将 FileInfos URL 替换为预签名 URL');
+    }
+
     const taskData = {
       SubAppId: parseInt(process.env.VOD_SUB_APP_ID),
       ModelName: req.body.ModelName,
       ModelVersion: req.body.ModelVersion,
-      FileInfos: req.body.FileInfos,
+      FileInfos: fileInfos && fileInfos.length > 0 ? fileInfos : undefined,
       Prompt: req.body.Prompt,
+      ...(req.body.NegativePrompt ? { NegativePrompt: req.body.NegativePrompt } : {}),
       EnhancePrompt: req.body.EnhancePrompt || 'Enabled',
       OutputConfig: {
         StorageMode: req.body.OutputConfig?.StorageMode || 'Permanent',
         Resolution: req.body.OutputConfig?.Resolution || '720P',
         PersonGeneration: req.body.OutputConfig?.PersonGeneration || 'AllowAdult',
         InputComplianceCheck: req.body.OutputConfig?.InputComplianceCheck || 'Disabled',
-        OutputComplianceCheck: req.body.OutputConfig?.OutputComplianceCheck || 'Disabled'
+        OutputComplianceCheck: req.body.OutputConfig?.OutputComplianceCheck || 'Disabled',
+        ...(req.body.OutputConfig?.Duration ? { Duration: Number(req.body.OutputConfig.Duration) } : {}),
+        ...(req.body.OutputConfig?.AspectRatio ? { AspectRatio: req.body.OutputConfig.AspectRatio } : {}),
+        ...(req.body.OutputConfig?.AudioGeneration ? { AudioGeneration: req.body.OutputConfig.AudioGeneration } : {}),
+        ...(req.body.OutputConfig?.EnhanceSwitch ? { EnhanceSwitch: req.body.OutputConfig.EnhanceSwitch } : {}),
       },
-      InputRegion: req.body.InputRegion || 'Mainland'
+      InputRegion: req.body.InputRegion || 'Mainland',
+      ...(req.body.SceneType ? { SceneType: req.body.SceneType } : {}),
     };
 
     const result = await vodService.createAigcVideoTask(taskData);

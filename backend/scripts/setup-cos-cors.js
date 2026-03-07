@@ -25,8 +25,9 @@ async function setupCORS() {
       AllowedOrigins: [
         'http://localhost:9999',
         'http://127.0.0.1:9999',
-        'http://cbc.cedricbwang.cloud:9999',
-        'https://cbc.cedricbwang.cloud:9999'
+        'http://43.132.153.123:9999',
+        'http://video.werookies.com:9999',
+        'https://video.werookies.com:9999'
       ],
       AllowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
       AllowedHeaders: ['*'],

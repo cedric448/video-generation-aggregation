@@ -84,7 +84,38 @@ const deleteFile = async (key) => {
   });
 };
 
+/**
+ * 生成 COS 文件的预签名 URL（有时效的临时访问链接）
+ * @param {string} key - 文件 Key
+ * @param {number} expires - 有效期（秒），默认 3600
+ * @returns {Promise<string>} 预签名 URL
+ */
+const getSignedUrl = (key, expires = 3600) => {
+  return new Promise((resolve, reject) => {
+    const bucket = process.env.COS_BUCKET;
+    const region = process.env.COS_REGION;
+
+    cos.getObjectUrl(
+      {
+        Bucket: bucket,
+        Region: region,
+        Key: key,
+        Sign: true,
+        Expires: expires,
+      },
+      (err, data) => {
+        if (err) {
+          return reject(new Error(`生成预签名 URL 失败: ${err.message}`));
+        }
+        console.log('预签名 URL 生成成功:', data.Url);
+        resolve(data.Url);
+      }
+    );
+  });
+};
+
 module.exports = {
   uploadFile,
   deleteFile,
+  getSignedUrl,
 };

@@ -1,15 +1,38 @@
 # AI 视频生成聚合平台
 
-一个集成多个 AI 视频生成模型的 Web 应用,支持前端直传腾讯云 COS,提供统一的界面和 API 接口。
+一个集成多个 AI 视频生成模型的 Web 应用，支持前端直传腾讯云 COS，提供统一的界面和 API 接口。
 
 ## 功能特性
 
-- ✅ **多模型支持**: 集成海螺(Hailuo)、可灵(Kling)、即梦(Jimeng)、豆包(Seedance)、Google Video 等多个 AI 视频生成模型
-- ✅ **前端直传**: 文件直接上传到腾讯云 COS,无需经过后端服务器,提升上传速度
-- ✅ **STS 临时密钥**: 使用腾讯云 STS 服务生成临时密钥,保证安全性
-- ✅ **任务管理**: 实时查询视频生成任务状态,支持进度显示
-- ✅ **安全认证**: Nginx 基本认证保护,防止未授权访问
-- ✅ **Docker 部署**: 支持 Docker 和 Docker Compose 一键部署
+- **多模型支持**: 集成 10 个主流 AI 视频生成模型，覆盖海螺、可灵、即梦、Vidu、豆包、Google Veo、混元、明眸、OS 等
+- **前端直传**: 文件直接上传到腾讯云 COS，无需经过后端服务器，上传速度更快
+- **STS 临时密钥**: 使用腾讯云 STS 服务生成临时密钥，保证上传安全性
+- **任务实时轮询**: 每 5 秒查询一次视频生成进度，完成后自动展示结果
+- **双栏响应式布局**: PC 端左右分栏展示，手机端自动折叠为单列
+- **高级选项折叠**: 默认只展示常用配置，高级参数按需展开
+- **安全认证**: Nginx Basic Auth 保护，防止未授权访问
+- **Docker 部署**: 支持 Docker Compose 一键部署
+
+## 存储说明
+
+| 用途 | 地址 |
+|------|------|
+| Input（上传素材） | `https://videogen-1258272081.cos.ap-hongkong.myqcloud.com` |
+| Output（生成结果） | 腾讯云 · 云点播 · cedricbwang 应用 |
+
+## 支持的模型
+
+| 模型 | 版本 | 默认版本 | 支持音频 | 支持首尾帧 | 备注 |
+|------|------|---------|---------|----------|------|
+| 海螺 (Hailuo) | 2.3-fast / 2.3 / 02 | 2.3-fast | — | — | 支持 768P/1080P |
+| 可灵 (Kling) | 3.0-Omni / 3.0 / 2.6 / 2.5 / 2.1 / 2.0 / 1.6 / O1 | 3.0-Omni | ✓ | 2.6/2.1 | 2.6 首尾帧时仅无声 |
+| 即梦 (Jimeng) | 3.0pro | 3.0pro | — | — | |
+| Vidu | q3-pro / q2 / q2-pro / q2-turbo | q3-pro | ✓ | q2-pro/q2-turbo | q2 支持多图（≤7张） |
+| Google Veo (GV) | 3.1 / 3.1-fast | 3.1-fast | ✓ | ✓（单图时） | 多图时首尾帧不可用 |
+| 混元 (Hunyuan) | 1.5 | 1.5 | — | — | |
+| 明眸 (Mingmou) | 1.0 | 1.0 | — | — | |
+| 豆包 (Seedance) | 1.5-pro / 1.0-pro / 1.0-pro-fast / 1.0-lite-i2v | 1.5-pro | 1.5-pro | — | 1.5-pro 最高 720P |
+| OS | 2.0 | 2.0 | ✓ | — | |
 
 ## 技术栈
 
@@ -22,55 +45,55 @@
 ### 后端
 - Node.js 18
 - Express
-- 腾讯云 SDK (COS + VOD)
+- 腾讯云 SDK（COS + VOD + STS）
 - Multer
 
 ### 基础设施
-- Nginx (反向代理 + 认证)
+- Nginx（反向代理 + Basic Auth）
 - Docker & Docker Compose
-- 腾讯云 COS (对象存储)
-- 腾讯云 VOD (视频处理)
+- 腾讯云 COS（对象存储）
+- 腾讯云 VOD（视频处理）
 
 ## 项目结构
 
 ```
-video-gen/
-├── backend/                 # 后端服务
-│   ├── services/           # 业务逻辑
-│   │   ├── cosService.js   # COS 文件上传
-│   │   ├── stsService.js   # STS 临时密钥
-│   │   └── vodService.js   # VOD 视频生成
-│   ├── scripts/            # 工具脚本
-│   │   └── setup-cos-cors.js  # COS CORS 配置
-│   ├── server.js           # Express 服务器
-│   ├── .env.example        # 环境变量示例
-│   └── Dockerfile          # 后端 Docker 镜像
-├── frontend/               # 前端应用
+video-generation-aggregation/
+├── backend/
+│   ├── services/
+│   │   ├── cosService.js        # COS 文件上传
+│   │   ├── stsService.js        # STS 临时密钥
+│   │   └── vodService.js        # VOD 视频生成任务
+│   ├── scripts/
+│   │   └── setup-cos-cors.js    # COS CORS 配置脚本
+│   ├── server.js                # Express 服务器入口
+│   ├── .env.example
+│   └── Dockerfile
+├── frontend/
 │   ├── src/
-│   │   ├── components/     # React 组件
-│   │   └── services/       # API 服务
-│   ├── public/             # 静态资源
-│   ├── .env.example        # 环境变量示例
-│   ├── nginx.conf          # 前端 Nginx 配置
-│   └── Dockerfile          # 前端 Docker 镜像
-├── nginx/                  # Nginx 配置文件
-│   ├── video-gen.conf      # 主配置文件
-│   └── README.md           # Nginx 配置说明
-├── archive/                # 归档文件
-│   ├── docs/               # 历史文档
-│   └── test-files/         # 测试文件
-├── docker-compose.yml      # Docker Compose 配置
-├── .dockerignore          # Docker 忽略文件
-└── README.md              # 项目说明文档
+│   │   ├── components/
+│   │   │   ├── VideoGenForm.js  # 主表单组件（双栏布局）
+│   │   │   └── VideoGenForm.css
+│   │   ├── services/
+│   │   │   ├── api.js           # 后端 API 封装
+│   │   │   └── cosService.js    # 前端直传 COS
+│   │   └── App.js
+│   ├── nginx.conf
+│   ├── .env.example
+│   └── Dockerfile
+├── nginx/
+│   ├── video-gen.conf           # Nginx 主配置
+│   └── 00-default-deny.conf     # 禁止 80 端口直接访问
+├── docker-compose.yml
+└── README.md
+```
 
 ## 快速开始
 
 ### 环境要求
 
 - Node.js 18+
-- npm 或 yarn
-- 腾讯云账号(需要 COS 和 VOD 服务)
-- (可选) Docker 和 Docker Compose
+- 腾讯云账号（需开通 COS 和 VOD 服务）
+- （可选）Docker & Docker Compose
 
 ### 1. 克隆项目
 
@@ -81,186 +104,109 @@ cd video-generation-aggregation
 
 ### 2. 配置环境变量
 
-#### 后端配置
+**后端（`backend/.env`）：**
 
 ```bash
-cd backend
-cp .env.example .env
+cd backend && cp .env.example .env
 ```
 
-编辑 `.env` 文件,填入您的腾讯云密钥:
-
 ```env
-# 腾讯云密钥
 TENCENTCLOUD_SECRET_ID=your_secret_id
 TENCENTCLOUD_SECRET_KEY=your_secret_key
 
-# COS 配置
-COS_BUCKET=your-bucket-name
+COS_BUCKET=videogen-1258272081
 COS_REGION=ap-hongkong
 COS_INPUT_PATH=video-gen/input
 COS_OUTPUT_PATH=video-gen/output
 
-# VOD 配置
 VOD_SUB_APP_ID=your_sub_app_id
 
-# 服务器配置
 PORT=9998
 NODE_ENV=production
 ```
 
-#### 前端配置
+**前端（`frontend/.env`）：**
 
 ```bash
-cd frontend
-cp .env.example .env
+cd frontend && cp .env.example .env
 ```
 
-编辑 `.env` 文件:
-
 ```env
-# 前端端口
-PORT=9999
-
-# 后端 API 地址
-REACT_APP_API_BASE_URL=http://your-domain.com:9998/api
-
-# 轮询间隔(毫秒)
+REACT_APP_API_BASE_URL=http://your-domain:9998/api
 REACT_APP_POLLING_INTERVAL=5000
 ```
 
 ### 3. 配置 COS CORS
 
 ```bash
-cd backend
-node scripts/setup-cos-cors.js
+node backend/scripts/setup-cos-cors.js
 ```
 
-### 4. 部署方式
+### 4. 部署
 
-#### 方式 A: Docker Compose (推荐)
+#### Docker Compose（推荐）
 
 ```bash
-# 构建并启动服务
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
+docker compose up -d
+docker compose logs -f
 ```
 
-#### 方式 B: 手动部署
-
-**启动后端:**
+#### 手动部署
 
 ```bash
-cd backend
-npm install
-npm start
-```
+# 后端
+cd backend && npm install && npm start
 
-**启动前端:**
-
-```bash
-cd frontend
-npm install
-npm start  # 开发模式
-# 或
-npm run build  # 生产构建
+# 前端（生产构建）
+cd frontend && npm install && npm run build
+# 将 build/ 目录部署到 Nginx 静态目录
+cp -r frontend/build/* /var/www/video-gen/
 ```
 
 ### 5. 配置 Nginx
 
 ```bash
-# 复制配置文件
 sudo cp nginx/video-gen.conf /etc/nginx/conf.d/
+sudo cp nginx/00-default-deny.conf /etc/nginx/conf.d/
 
 # 创建认证文件
-sudo htpasswd -c /etc/nginx/.htpasswd yeyefox000
-# 输入密码: asdf12345
+sudo htpasswd -c /etc/nginx/.htpasswd <username>
 
-# 测试并重载配置
-sudo nginx -t
-sudo nginx -s reload
+# 重载
+sudo nginx -t && sudo nginx -s reload
 ```
 
-## 使用指南
+### 6. 访问
 
-### 访问应用
-
-访问 `http://your-domain:9999`
-
-- **用户名**: yeyefox000
-- **密码**: asdf12345
-
-### 生成视频流程
-
-1. **选择模型**: 从下拉菜单选择 AI 模型和版本
-2. **上传文件**: 点击上传按钮,选择参考图片或视频
-3. **输入 Prompt**: 描述您想要生成的视频内容
-4. **选择分辨率**: 720P 或 1080P
-5. **提交任务**: 点击"生成视频"按钮
-6. **等待完成**: 系统会实时显示任务进度
-7. **下载视频**: 生成完成后可以在线播放或下载
-
-### 支持的模型
-
-| 模型 | 版本 | 特点 |
-|------|------|------|
-| 海螺 (Hailuo) | 2.3-fast | 快速生成,适合简单场景 |
-| 可灵 (Kling) | 3.0, 3.0-Omni | 高质量,支持多种风格 |
-| 即梦 (Jimeng) | 3.0pro | 专业级效果 |
-| 豆包 (Seedance) | 1.5-pro | 创意风格 |
-| Google (GV) | 3.1-fast | Google 视频生成模型 |
+```
+http://your-domain:9999
+```
 
 ## API 文档
 
-### 获取 STS 临时密钥
-
-```http
-GET /api/sts/credentials
-```
-
-**响应:**
+### GET /api/sts/credentials — 获取 STS 临时密钥
 
 ```json
 {
   "success": true,
   "data": {
-    "credentials": {
-      "tmpSecretId": "...",
-      "tmpSecretKey": "...",
-      "sessionToken": "..."
-    },
+    "credentials": { "tmpSecretId": "...", "tmpSecretKey": "...", "sessionToken": "..." },
     "expiredTime": 1234567890,
-    "bucket": "your-bucket",
+    "bucket": "videogen-1258272081",
     "region": "ap-hongkong",
     "inputPath": "video-gen/input"
   }
 }
 ```
 
-### 创建视频生成任务
-
-```http
-POST /api/video/create
-Content-Type: application/json
-```
-
-**请求体:**
+### POST /api/video/create — 创建视频生成任务
 
 ```json
 {
   "ModelName": "Hailuo",
   "ModelVersion": "2.3-fast",
   "FileInfos": [
-    {
-      "Type": "Url",
-      "Url": "https://xxx.cos.xxx.myqcloud.com/xxx.jpg",
-      "Category": "Image"
-    }
+    { "Type": "Url", "Url": "https://xxx.cos.xxx.myqcloud.com/xxx.jpg", "Category": "Image" }
   ],
   "Prompt": "视频描述",
   "EnhancePrompt": "Enabled",
@@ -269,116 +215,71 @@ Content-Type: application/json
     "Resolution": "720P",
     "PersonGeneration": "AllowAdult",
     "InputComplianceCheck": "Disabled",
-    "OutputComplianceCheck": "Disabled"
+    "OutputComplianceCheck": "Disabled",
+    "Duration": 6
   },
   "InputRegion": "Mainland"
 }
 ```
 
-### 查询任务状态
+### GET /api/video/status/:taskId — 查询任务状态
 
-```http
-GET /api/video/status/:taskId
-```
+返回任务当前状态（`WAITING` / `PROCESSING` / `FINISH` / `FAIL`）及输出视频 URL。
+
+## 使用流程
+
+1. 选择模型及版本
+2. 上传参考图片/视频（直传 COS）
+3. 填写 Prompt 描述
+4. 配置分辨率、时长等输出参数
+5. 点击「生成视频」
+6. 等待任务完成，在线播放或下载
 
 ## 常见问题
 
-### 1. 上传失败: CORS blocked
+**上传失败 CORS blocked**
+运行 `node backend/scripts/setup-cos-cors.js` 配置 COS CORS 规则。
 
-**原因**: COS 存储桶未配置 CORS 规则
+**视频生成失败（人物审核）**
+图片含有人脸被安全策略拦截，尝试使用风景、物品等不含人物的图片，或在高级选项中调整合规检查设置。
 
-**解决**: 运行 `node backend/scripts/setup-cos-cors.js`
+**ModelVersion invalid 错误**
+确保所选版本与模型匹配，页面下拉列表中的版本均为该模型支持的合法版本。
 
-### 2. 视频生成失败: 人物审核
+**Seedance 1.5-pro 不支持 1080P**
+该版本最高支持 720P，选择此版本时分辨率选项会自动限制为 720P。
 
-**原因**: 图片包含人脸被安全审核拦截
-
-**解决**: 使用不包含人物的图片,如风景、物品等
-
-### 3. 无法访问前端
-
-**原因**: Nginx 配置错误或端口被占用
-
-**解决**: 
-- 检查 Nginx 配置: `sudo nginx -t`
-- 检查端口占用: `netstat -tlnp | grep 9999`
-
-### 4. 后端 API 连接失败
-
-**原因**: 后端服务未启动或环境变量配置错误
-
-**解决**:
-- 检查后端服务: `ps aux | grep "node server.js"`
-- 验证 .env 配置
-- 查看后端日志: `tail -f backend/backend.log`
-
-## 安全建议
-
-1. **定期更新密码**: 使用 `htpasswd` 更新 Nginx 认证密码
-2. **保护环境变量**: 确保 `.env` 文件不被提交到 Git
-3. **使用 HTTPS**: 生产环境建议配置 SSL 证书
-4. **限制 CORS**: 只允许特定域名访问 COS
-5. **定期更新密钥**: 定期轮换腾讯云 API 密钥
-
-## 开发指南
-
-### 本地开发
-
-```bash
-# 后端开发
-cd backend
-npm run dev
-
-# 前端开发
-cd frontend
-npm start
-```
-
-### 代码规范
-
-- 使用 ESLint 进行代码检查
-- 遵循 Airbnb JavaScript 风格指南
-- 提交前运行测试
-
-### 目录说明
-
-- `backend/services/` - 业务逻辑层
-- `frontend/src/components/` - React 组件
-- `frontend/src/services/` - API 调用封装
-
-## 性能优化
-
-- 前端资源 Gzip 压缩
-- COS 直传避免后端瓶颈
-- Nginx 反向代理缓存
-- 生产环境构建优化
-
-## 监控与日志
-
-### Nginx 日志
-
-- 访问日志: `/var/log/nginx/video-gen-access.log`
-- 错误日志: `/var/log/nginx/video-gen-error.log`
-
-### 应用日志
-
-- 后端日志: `backend/backend.log`
-- 前端日志: `frontend/frontend.log`
+**Kling 2.6 有声生成失败**
+2.6 版本使用首尾帧时只支持无声模式，请将音频设置为「关闭」。
 
 ## 更新日志
 
-### v1.0.0 (2026-03-07)
+### v1.2.0 (2026-03-07)
 
-- ✅ 支持多个 AI 视频生成模型
-- ✅ 前端直传 COS 功能
-- ✅ STS 临时密钥认证
-- ✅ Nginx 基本认证
-- ✅ Docker 部署支持
-- ✅ 完整的任务状态管理
+- **UI 重构**：双栏响应式布局，PC 端左右分栏，手机端自动单列
+- **高级选项**：默认折叠，减少页面噪音
+- **Kling**：新增版本 3.0-Omni（默认）、3.0、2.6；支持有声/无声；2.6 首尾帧仅无声
+- **Vidu**：新增 q3-pro（默认）；q2 支持多图（最多 7 张）
+- **新增 Seedance（豆包）**：版本 1.5-pro / 1.0-pro / 1.0-pro-fast / 1.0-lite-i2v；1.5-pro 支持有声/无声，最高 720P
+- **GV**：多图输入时自动禁用首尾帧
+- **存储说明**：页面顶部新增 Input/Output 存储位置说明
+- **Bug 修复**：修复 Hailuo 初始 ModelVersion 传值错误（`Hailuo` → `2.3-fast`）
+- **Bug 修复**：修正豆包模型入参名称（`Seeddance` → `Seedance`）
 
-## 贡献
+### v1.0.0 (2026-02-15)
 
-欢迎提交 Issue 和 Pull Request!
+- 多模型 AI 视频生成（Hailuo / Kling / Jimeng / Vidu / GV / Hunyuan / Mingmou / OS）
+- 前端直传 COS + STS 临时密钥
+- 任务状态实时轮询
+- Nginx Basic Auth 安全认证
+- Docker Compose 一键部署
+
+## 安全建议
+
+- `.env` 文件已加入 `.gitignore`，请勿手动提交密钥
+- 定期轮换腾讯云 API 密钥
+- 生产环境建议配置 HTTPS
+- 定期更新 Nginx 认证密码
 
 ## 许可证
 
@@ -388,9 +289,3 @@ MIT License
 
 - GitHub: [@cedric448](https://github.com/cedric448)
 - 项目地址: [video-generation-aggregation](https://github.com/cedric448/video-generation-aggregation)
-
-## 致谢
-
-- [腾讯云](https://cloud.tencent.com/) - 提供 COS 和 VOD 服务
-- [Ant Design](https://ant.design/) - UI 组件库
-- [React](https://react.dev/) - 前端框架

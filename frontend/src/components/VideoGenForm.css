@@ -1,45 +1,245 @@
+/* =========================================================
+   全局容器
+   ========================================================= */
 .video-gen-form-container {
   width: 100%;
 }
 
+/* =========================================================
+   顶部存储说明条
+   ========================================================= */
+.storage-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #f0f4ff;
+  border: 1px solid #d6e0ff;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #555;
+  flex-wrap: wrap;
+}
+
+.storage-info-bar .info-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.storage-info-bar .info-label {
+  color: #888;
+  white-space: nowrap;
+}
+
+.storage-info-bar code {
+  background: #e8eeff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: #4a6cf7;
+  word-break: break-all;
+}
+
+/* =========================================================
+   主卡片
+   ========================================================= */
 .form-card {
   margin-bottom: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .form-card .ant-card-head {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4a6cf7 0%, #764ba2 100%);
   color: white;
-  border-radius: 8px 8px 0 0;
+  min-height: 52px;
+  padding: 0 20px;
 }
 
 .form-card .ant-card-head-title {
   color: white;
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.upload-hint {
-  margin-top: 8px;
-  color: #666;
+.form-card .ant-card-extra {
+  color: rgba(255, 255, 255, 0.8);
   font-size: 12px;
 }
 
-.form-actions {
-  margin-top: 32px;
-  text-align: center;
+.form-card .ant-card-body {
+  padding: 24px;
 }
 
+/* =========================================================
+   双栏布局
+   ========================================================= */
+.form-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 40px;
+  align-items: start;
+}
+
+.form-col-left {
+  min-width: 0;
+}
+
+.form-col-right {
+  min-width: 0;
+  border-left: 1px solid #f0f0f0;
+  padding-left: 40px;
+}
+
+/* =========================================================
+   分区标题
+   ========================================================= */
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a6cf7;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: linear-gradient(135deg, #4a6cf7, #764ba2);
+  border-radius: 2px;
+}
+
+/* =========================================================
+   模型选择区域（横排 model + version）
+   ========================================================= */
+.model-select-row {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 12px;
+}
+
+/* =========================================================
+   上传区域
+   ========================================================= */
+.upload-hint {
+  margin-top: 6px;
+  color: #888;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.upload-warn {
+  color: #fa8c16;
+  font-size: 12px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* =========================================================
+   输出配置区域
+   ========================================================= */
+.output-section {
+  margin-bottom: 0;
+}
+
+/* =========================================================
+   高级选项折叠
+   ========================================================= */
+.advanced-collapse {
+  margin-top: 16px;
+  border: 1px solid #f0f0f0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+}
+
+.advanced-collapse .ant-collapse-header {
+  font-size: 13px !important;
+  color: #888 !important;
+  padding: 10px 16px !important;
+}
+
+.advanced-collapse .ant-collapse-content-box {
+  padding: 12px 16px !important;
+}
+
+.advanced-collapse .ant-collapse-item {
+  border-bottom: none !important;
+}
+
+/* Form items inside advanced section - compact */
+.advanced-form-items .ant-form-item {
+  margin-bottom: 12px;
+}
+
+.advanced-form-items .ant-form-item-label {
+  padding-bottom: 4px;
+}
+
+.advanced-form-items .ant-form-item-label > label {
+  font-size: 13px;
+  color: #666;
+}
+
+/* =========================================================
+   提交按钮区域
+   ========================================================= */
+.form-actions {
+  margin-top: 24px;
+  text-align: center;
+  padding-top: 20px;
+  border-top: 1px solid #f5f5f5;
+}
+
+.form-submit-btn {
+  min-width: 140px;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px !important;
+  background: linear-gradient(135deg, #4a6cf7 0%, #764ba2 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(74, 108, 247, 0.35) !important;
+  transition: all 0.2s !important;
+}
+
+.form-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(74, 108, 247, 0.45) !important;
+}
+
+.form-reset-btn {
+  min-width: 90px;
+  height: 44px;
+  border-radius: 8px !important;
+}
+
+/* =========================================================
+   任务状态卡片
+   ========================================================= */
 .task-status-card {
   margin-top: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
   text-align: center;
 }
 
 .task-id {
   margin-top: 16px;
-  color: #666;
-  font-size: 14px;
+  color: #888;
+  font-size: 13px;
 }
 
 .video-result {
@@ -51,15 +251,56 @@
 
 .video-result video {
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  max-width: 600px;
+  width: 100%;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .form-card {
-    margin: 0 -8px;
+/* =========================================================
+   响应式 — 平板及以下单列
+   ========================================================= */
+@media (max-width: 900px) {
+  .form-two-col {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
-  
+
+  .form-col-right {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid #f0f0f0;
+    padding-top: 24px;
+    margin-top: 8px;
+  }
+
+  .model-select-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-card .ant-card-body {
+    padding: 16px;
+  }
+
+  .model-select-row {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-info-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .form-submit-btn {
+    width: 100%;
+  }
+
+  .form-reset-btn {
+    width: 100%;
+  }
+
   .video-result video {
     max-width: 100% !important;
   }
