@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: video-gen-backend
+    restart: unless-stopped
+    ports:
+      - "9998:9998"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/temp:/app/temp
+    networks:
+      - video-gen-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9998/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: video-gen-frontend
+    restart: unless-stopped
+    ports:
+      - "9999:80"
+    depends_on:
+      - backend
+    networks:
+      - video-gen-network
+
+networks:
+  video-gen-network:
+    driver: bridge
