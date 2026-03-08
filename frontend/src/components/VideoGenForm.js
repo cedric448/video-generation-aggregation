@@ -166,13 +166,14 @@ const MODEL_CONFIG = {
     },
   },
   OS: {
-    label: 'OS',
+    label: 'OpenAI Sora (OS)',
     versions: ['2.0'],
     defaultVersion: '2.0',
     supportsImageInput: true,
     supportsLastFrame: false,
     supportsAspectRatio: true,
-    supportsAudio: true,
+    supportsAudio: false,      // UI 不显示开关；提交时固定 AudioGeneration: 'Enabled'
+    audioAlwaysEnabled: true, // OS 始终开启音频
     resolution: { options: ['720P'], default: '720P' },
     duration: { options: [4, 8, 12], default: 8, unit: '秒' },
     aspectRatio: { options: ['16:9', '9:16'], default: '16:9', note: '仅文生视频时可用' },
@@ -198,8 +199,10 @@ const RequiredMark = () => (
 const VideoGenForm = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [fileList, setFileList] = useState([]);
+  const [uploadedFiles, setUploadedFiles] = useState([]);      // 首帧/多图 已上传
+  const [fileList, setFileList] = useState([]);                // 首帧/多图 antd fileList
+  const [lastFrameFile, setLastFrameFile] = useState(null);   // 尾帧 已上传文件
+  const [lastFrameFileList, setLastFrameFileList] = useState([]); // 尾帧 antd fileList
   const [taskId, setTaskId] = useState(null);
   const [taskStatus, setTaskStatus] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
@@ -229,13 +232,28 @@ const VideoGenForm = () => {
   const gvMultiImage = selectedModel === 'GV' && uploadedFiles.length > 1;
   const showLastFrame = canLastFrame && !gvMultiImage;
 
-  // Kling 2.6 首尾帧时强制无声
+  // Kling 2.6 首尾帧时强制无声（有尾帧上传时才算首尾帧模式）
   const kling26WithLastFrame =
     selectedModel === 'Kling' &&
     selectedVersion === '2.6' &&
-    uploadedFiles.length > 0;
+    lastFrameFile !== null;
 
-  // 文件上传前校验
+  // 动态计算最大上传数量
+  const maxFiles = (() => {
+    // 支持首尾帧的模式下，首帧只能 1 张
+    if (canLastFrame && !gvMultiImage) return 1;
+    // Vidu q2 支持多图，最多 7 张
+    if (selectedModel === 'Vidu') {
+      const vCap = modelCfg.versionCapabilities?.[selectedVersion];
+      if (vCap?.maxImages) return vCap.maxImages;
+    }
+    // GV 多图最多 3 张
+    if (selectedModel === 'GV') return 3;
+    // 其他模型默认 1 张
+    return 1;
+  })();
+
+  // 文件上传前校验（首帧/多图）
   const beforeUpload = (file) => {
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
@@ -243,8 +261,45 @@ const VideoGenForm = () => {
       message.error('只能上传图片或视频文件！');
       return Upload.LIST_IGNORE;
     }
-    if (file.size / 1024 / 1024 > 100) {
-      message.error('文件大小不能超过 100MB！');
+    if (isImage) {
+      // 图片限制：仅支持 jpeg/png
+      const allowed = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowed.includes(file.type.toLowerCase())) {
+        message.error('图片仅支持 JPEG / PNG 格式！');
+        return Upload.LIST_IGNORE;
+      }
+      // 图片限制：最大 10MB
+      if (file.size / 1024 / 1024 > 10) {
+        message.error('图片大小不能超过 10MB！');
+        return Upload.LIST_IGNORE;
+      }
+    }
+    if (isVideo && file.size / 1024 / 1024 > 100) {
+      message.error('视频大小不能超过 100MB！');
+      return Upload.LIST_IGNORE;
+    }
+    // 检查上传数量上限
+    if (uploadedFiles.length >= maxFiles) {
+      message.error(`当前模式最多上传 ${maxFiles} 个文件！`);
+      return Upload.LIST_IGNORE;
+    }
+    return true;
+  };
+
+  // 尾帧上传前校验（只允许 jpeg/png，最大 10MB，只能 1 张）
+  const beforeUploadLastFrame = (file) => {
+    const isImage = file.type.startsWith('image/');
+    if (!isImage) {
+      message.error('尾帧只能上传图片！');
+      return Upload.LIST_IGNORE;
+    }
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowed.includes(file.type.toLowerCase())) {
+      message.error('尾帧图片仅支持 JPEG / PNG 格式！');
+      return Upload.LIST_IGNORE;
+    }
+    if (file.size / 1024 / 1024 > 10) {
+      message.error('尾帧图片大小不能超过 10MB！');
       return Upload.LIST_IGNORE;
     }
     return true;
@@ -289,6 +344,48 @@ const VideoGenForm = () => {
 
   const handleFileListChange = ({ fileList: newFileList }) => {
     setFileList(newFileList);
+  };
+
+  // 尾帧上传
+  const handleLastFrameUpload = async (options) => {
+    const { file, onSuccess, onError, onProgress } = options;
+    try {
+      setLoading(true);
+      message.loading({ content: '正在上传尾帧到腾讯云 COS...', key: 'upload-last' });
+
+      const result = await uploadFileToCOS(file, (progressData) => {
+        onProgress({ percent: progressData.percent });
+      });
+
+      message.success({ content: '尾帧上传成功！', key: 'upload-last' });
+
+      const uploadedFile = {
+        uid: file.uid,
+        name: file.name,
+        url: result.url,
+        key: result.key,
+        type: 'image',
+        status: 'done',
+      };
+      setLastFrameFile(uploadedFile);
+      onSuccess(result);
+    } catch (error) {
+      console.error('尾帧上传失败:', error);
+      message.error({ content: `尾帧上传失败: ${error.message}`, key: 'upload-last' });
+      onError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveLastFrame = () => {
+    setLastFrameFile(null);
+    setLastFrameFileList([]);
+    return true;
+  };
+
+  const handleLastFrameFileListChange = ({ fileList: newList }) => {
+    setLastFrameFileList(newList);
   };
 
   // 轮询任务状态
@@ -352,19 +449,25 @@ const VideoGenForm = () => {
       setLoading(true);
       message.loading({ content: '正在创建视频生成任务...', key: 'submit' });
 
-      // 构建 FileInfos
+      // ── 构建 FileInfos ──
+      // 规则：
+      //   1. 支持首尾帧时，FileInfos 只放 1 张首帧（尾帧走 LastFrameUrl）
+      //   2. Vidu q2 多图：最多 7 张
+      //   3. GV 多图：最多 3 张，不传尾帧
+      //   4. 其他：最多 1 张，最多 3 张（API 上限）
       let fileInfos = undefined;
       if (cfg.supportsImageInput && uploadedFiles.length > 0) {
-        // Vidu q2: 支持 ObjectId 传入，但这里统一使用 Url 方式
-        fileInfos = uploadedFiles.map((f) => ({
+        // 取前 maxFiles 张（多传按上限截断）
+        const filesToSend = uploadedFiles.slice(0, maxFiles);
+        fileInfos = filesToSend.map((f) => ({
           Type: 'Url',
           Url: f.url,
           Category: f.type === 'image' ? 'Image' : 'Video',
         }));
       }
 
-      // GV 多图时不传 LastFrameFileId / LastFrameUrl（通过不在 sceneType 里设置来保证）
-      // 当前表单没有单独 LastFrameFileId 字段，所以这里不做额外处理
+      // 尾帧 URL（仅支持首尾帧且非 GV 多图时使用）
+      const lastFrameUrl = (showLastFrame && lastFrameFile) ? lastFrameFile.url : undefined;
 
       // 构建 OutputConfig
       const outputConfig = {
@@ -377,14 +480,16 @@ const VideoGenForm = () => {
       if (values.duration) outputConfig.Duration = Number(values.duration);
       if (values.aspectRatio && cfg.supportsAspectRatio) outputConfig.AspectRatio = values.aspectRatio;
 
-      // 音频：只有当前版本支持音频时才传
+      // 音频：OS 固定 Enabled；其他只有当前版本支持音频时才传
       const versionSupportsAudio = vCap.supportsAudio ?? cfg.supportsAudio;
       // Kling 2.6 + 首尾帧时强制无声
       const forceNoAudio =
         values.modelName === 'Kling' &&
         values.modelVersion === '2.6' &&
         uploadedFiles.length > 0;
-      if (versionSupportsAudio && !forceNoAudio && values.audioGeneration) {
+      if (cfg.audioAlwaysEnabled) {
+        outputConfig.AudioGeneration = 'Enabled';
+      } else if (versionSupportsAudio && !forceNoAudio && values.audioGeneration) {
         outputConfig.AudioGeneration = values.audioGeneration;
       }
 
@@ -394,6 +499,7 @@ const VideoGenForm = () => {
         ModelName: values.modelName,
         ModelVersion: values.modelVersion,
         ...(fileInfos ? { FileInfos: fileInfos } : {}),
+        ...(lastFrameUrl ? { LastFrameUrl: lastFrameUrl } : {}),
         Prompt: values.prompt,
         ...(values.negativePrompt ? { NegativePrompt: values.negativePrompt } : {}),
         EnhancePrompt: values.enhancePrompt || 'Enabled',
@@ -423,6 +529,8 @@ const VideoGenForm = () => {
     form.resetFields();
     setUploadedFiles([]);
     setFileList([]);
+    setLastFrameFile(null);
+    setLastFrameFileList([]);
     setTaskId(null);
     setTaskStatus(null);
     setSelectedModel('Hailuo');
@@ -437,6 +545,8 @@ const VideoGenForm = () => {
     setSelectedVersion(newVersion);
     setUploadedFiles([]);
     setFileList([]);
+    setLastFrameFile(null);
+    setLastFrameFileList([]);
 
     // 计算默认分辨率（Seedance 1.5-pro 不支持 1080P）
     let defaultResolution = cfg.resolution.default;
@@ -458,6 +568,9 @@ const VideoGenForm = () => {
   // 切换版本时更新相关字段
   const handleVersionChange = (value) => {
     setSelectedVersion(value);
+    // 版本切换时清空尾帧
+    setLastFrameFile(null);
+    setLastFrameFileList([]);
 
     // Seedance 1.5-pro 不支持 1080P，切换到 1.5-pro 时自动降分辨率
     if (selectedModel === 'Seedance') {
@@ -670,52 +783,93 @@ const VideoGenForm = () => {
               {/* 文件上传 */}
               <div className="section-title" style={{ marginTop: 8 }}>素材上传</div>
               {modelCfg.supportsImageInput ? (
-                <Form.Item
-                  label={
-                    <span>
-                      参考文件 <RequiredMark />&nbsp;
-                      <Tooltip title={(() => {
-                        if (selectedModel === 'Vidu') {
-                          const vCap = modelCfg.versionCapabilities?.[selectedVersion];
-                          if (vCap?.textAndImageOnly) return 'q3-pro 支持文生和图生（单图）';
-                          if (vCap?.maxImages) return `q2 最多支持 ${vCap.maxImages} 张图片`;
-                        }
-                        if (selectedModel === 'GV' && uploadedFiles.length > 0) return '多图输入时将禁用首尾帧功能';
-                        return '支持 JPEG/PNG 图片或视频，最大 100MB';
-                      })()}>
-                        <QuestionCircleOutlined style={{ color: '#ccc' }} />
-                      </Tooltip>
-                    </span>
-                  }
-                  style={{ marginBottom: 8 }}
-                >
-                  <Upload
-                    listType="picture-card"
-                    fileList={fileList}
-                    beforeUpload={beforeUpload}
-                    customRequest={handleUpload}
-                    onRemove={handleRemoveFile}
-                    onChange={handleFileListChange}
-                    accept="image/*,video/*"
-                    multiple
+                <>
+                  {/* 首帧 / 主素材 */}
+                  <Form.Item
+                    label={
+                      <span>
+                        {showLastFrame ? '首帧' : '参考文件'} <RequiredMark />&nbsp;
+                        <Tooltip title={(() => {
+                          if (showLastFrame) return '首帧图片：仅 1 张，JPEG/PNG，≤10MB';
+                          if (selectedModel === 'Vidu') {
+                            const vCap = modelCfg.versionCapabilities?.[selectedVersion];
+                            if (vCap?.textAndImageOnly) return 'q3-pro 支持文生和图生（单图），JPEG/PNG，≤10MB';
+                            if (vCap?.maxImages) return `q2 支持多图参考（1-${vCap.maxImages} 张），JPEG/PNG，≤10MB`;
+                          }
+                          if (selectedModel === 'GV') return `最多 ${maxFiles} 张，多图时首尾帧不可用，JPEG/PNG，≤10MB`;
+                          return 'JPEG/PNG 图片（≤10MB）或视频（≤100MB），最多 1 张';
+                        })()}>
+                          <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                        </Tooltip>
+                      </span>
+                    }
+                    style={{ marginBottom: 8 }}
                   >
-                    {fileList.length >= 3 ? null : (
-                      <div>
-                        <UploadOutlined />
-                        <div style={{ marginTop: 8, fontSize: 13 }}>上传文件</div>
-                      </div>
+                    <Upload
+                      listType="picture-card"
+                      fileList={fileList}
+                      beforeUpload={beforeUpload}
+                      customRequest={handleUpload}
+                      onRemove={handleRemoveFile}
+                      onChange={handleFileListChange}
+                      accept="image/jpeg,image/jpg,image/png,video/*"
+                      multiple={maxFiles > 1}
+                    >
+                      {fileList.length >= maxFiles ? null : (
+                        <div>
+                          <UploadOutlined />
+                          <div style={{ marginTop: 8, fontSize: 13 }}>上传文件</div>
+                        </div>
+                      )}
+                    </Upload>
+                    <div className="upload-hint">
+                      已上传 {uploadedFiles.length} / {maxFiles} 个文件（直传 COS）
+                      {maxFiles > 1 && <span>，最多 {maxFiles} 张</span>}
+                    </div>
+                    {gvMultiImage && (
+                      <div className="upload-warn">⚠ GV 多图模式：首尾帧不可用</div>
                     )}
-                  </Upload>
-                  <div className="upload-hint">
-                    已上传 {uploadedFiles.length} 个文件（直传 COS）
-                  </div>
-                  {gvMultiImage && (
-                    <div className="upload-warn">⚠ GV 多图模式：首尾帧不可用</div>
+                    {kling26WithLastFrame && (
+                      <div className="upload-warn">⚠ Kling 2.6 首尾帧模式：仅支持无声</div>
+                    )}
+                  </Form.Item>
+
+                  {/* 尾帧（仅首尾帧支持版本且非 GV 多图） */}
+                  {showLastFrame && (
+                    <Form.Item
+                      label={
+                        <span>
+                          尾帧&nbsp;
+                          <Tooltip title="尾帧图片：仅 1 张，JPEG/PNG，≤10MB；通过 LastFrameUrl 传入">
+                            <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                          </Tooltip>
+                        </span>
+                      }
+                      style={{ marginBottom: 8 }}
+                    >
+                      <Upload
+                        listType="picture-card"
+                        fileList={lastFrameFileList}
+                        beforeUpload={beforeUploadLastFrame}
+                        customRequest={handleLastFrameUpload}
+                        onRemove={handleRemoveLastFrame}
+                        onChange={handleLastFrameFileListChange}
+                        accept="image/jpeg,image/jpg,image/png"
+                        multiple={false}
+                      >
+                        {lastFrameFileList.length >= 1 ? null : (
+                          <div>
+                            <UploadOutlined />
+                            <div style={{ marginTop: 8, fontSize: 13 }}>上传尾帧</div>
+                          </div>
+                        )}
+                      </Upload>
+                      <div className="upload-hint">
+                        {lastFrameFile ? '尾帧已上传' : '可选，不上传则仅使用首帧'}
+                      </div>
+                    </Form.Item>
                   )}
-                  {kling26WithLastFrame && (
-                    <div className="upload-warn">⚠ Kling 2.6 首尾帧模式：仅支持无声</div>
-                  )}
-                </Form.Item>
+                </>
               ) : (
                 <div style={{ padding: '8px 12px', background: '#f6f8fa', borderRadius: 6, color: '#888', fontSize: 13, marginBottom: 16 }}>
                   当前模型仅支持 <strong>文生视频</strong>，直接填写 Prompt 即可。
