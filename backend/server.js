@@ -198,6 +198,90 @@ app.post('/api/video/create', async (req, res) => {
   }
 });
 
+// 创建图片生成任务
+app.post('/api/image/create', async (req, res) => {
+  try {
+    console.log('创建图片生成任务:', JSON.stringify(req.body, null, 2));
+
+    // 对 FileInfos 中的私有 COS URL 替换为预签名 URL
+    let fileInfos = req.body.FileInfos;
+    if (fileInfos && fileInfos.length > 0) {
+      fileInfos = await Promise.all(
+        fileInfos.map(async (fileInfo) => {
+          if (fileInfo.Type === 'Url' && fileInfo.Url) {
+            const urlObj = new URL(fileInfo.Url);
+            const key = decodeURIComponent(urlObj.pathname.replace(/^\//, ''));
+            const signedUrl = await cosService.getSignedUrl(key, 3600);
+            return { ...fileInfo, Url: signedUrl };
+          }
+          return fileInfo;
+        })
+      );
+      console.log('已将 FileInfos URL 替换为预签名 URL');
+    }
+
+    const taskData = {
+      SubAppId: parseInt(process.env.VOD_SUB_APP_ID),
+      ModelName: req.body.ModelName,
+      ModelVersion: req.body.ModelVersion,
+      FileInfos: fileInfos && fileInfos.length > 0 ? fileInfos : undefined,
+      Prompt: req.body.Prompt,
+      ...(req.body.NegativePrompt ? { NegativePrompt: req.body.NegativePrompt } : {}),
+      EnhancePrompt: req.body.EnhancePrompt || 'Enabled',
+      OutputConfig: {
+        StorageMode: req.body.OutputConfig?.StorageMode || 'Permanent',
+        PersonGeneration: req.body.OutputConfig?.PersonGeneration || 'AllowAdult',
+        InputComplianceCheck: req.body.OutputConfig?.InputComplianceCheck || 'Disabled',
+        OutputComplianceCheck: req.body.OutputConfig?.OutputComplianceCheck || 'Disabled',
+        ...(req.body.OutputConfig?.AspectRatio ? { AspectRatio: req.body.OutputConfig.AspectRatio } : {}),
+        ...(req.body.OutputConfig?.Resolution ? { Resolution: req.body.OutputConfig.Resolution } : {}),
+      },
+      InputRegion: req.body.InputRegion || 'Mainland',
+    };
+
+    const result = await vodService.createAigcImageTask(taskData);
+
+    console.log('图片任务创建成功:', result.TaskId);
+
+    res.json({
+      success: true,
+      data: {
+        taskId: result.TaskId,
+        requestId: result.RequestId,
+      },
+    });
+  } catch (error) {
+    console.error('创建图片任务失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || '创建图片任务失败',
+    });
+  }
+});
+
+// 查询图片任务状态
+app.get('/api/image/status/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    console.log('查询图片任务状态:', taskId);
+
+    const result = await vodService.queryImageTaskStatus(taskId);
+
+    console.log('图片任务状态:', result.Status);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('查询图片任务状态失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || '查询图片任务状态失败',
+    });
+  }
+});
+
 // 查询任务状态
 app.get('/api/video/status/:taskId', async (req, res) => {
   try {

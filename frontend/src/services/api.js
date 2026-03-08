@@ -102,4 +102,45 @@ export const queryTaskStatus = async (taskId) => {
   }
 };
 
+/**
+ * 创建 AIGC 图片生成任务
+ * @param {Object} taskData - 任务数据
+ * @returns {Promise<{TaskId: string}>}
+ */
+export const createAigcImageTask = async (taskData) => {
+  try {
+    const response = await apiClient.post('/image/create', taskData);
+
+    if (!response.success) {
+      throw new Error(response.error || '任务创建失败');
+    }
+
+    return {
+      TaskId: response.data.taskId,
+      RequestId: response.data.requestId,
+    };
+  } catch (error) {
+    throw new Error(`创建图片任务失败: ${error.message}`);
+  }
+};
+
+/**
+ * 查询图片任务状态
+ * @param {string} taskId - 任务 ID
+ * @returns {Promise<Object>}
+ */
+export const queryImageTaskStatus = async (taskId) => {
+  try {
+    const response = await apiClient.get(`/image/status/${taskId}`);
+
+    if (!response.success) {
+      throw new Error(response.error || '查询失败');
+    }
+
+    return response.data;
+  } catch (error) {
+    throw new Error(`查询图片任务状态失败: ${error.message}`);
+  }
+};
+
 export default apiClient;

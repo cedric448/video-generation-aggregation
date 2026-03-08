@@ -31,6 +31,20 @@
   padding: 0 20px;
 }
 
+/* Tabs 样式 */
+.app-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.app-tabs .ant-tabs-tab {
+  padding: 10px 20px;
+  font-size: 15px;
+}
+
+.app-tabs .ant-tabs-content-holder {
+  padding-top: 16px;
+}
+
 @media (max-width: 768px) {
   .App-header {
     padding: 12px 16px;
@@ -44,4 +58,10 @@
     margin: 16px auto;
     padding: 0 12px;
   }
+
+  .app-tabs .ant-tabs-tab {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
 }
+

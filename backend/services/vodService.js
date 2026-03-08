@@ -78,7 +78,66 @@ const queryTaskStatus = async (taskId) => {
   }
 };
 
+/**
+ * 创建 AIGC 图片生成任务
+ * @param {Object} taskData - 任务参数
+ * @returns {Promise<{TaskId: string, RequestId: string}>}
+ */
+const createAigcImageTask = async (taskData) => {
+  try {
+    console.log('调用腾讯云 CreateAigcImageTask API...');
+    console.log('请求参数:', JSON.stringify(taskData, null, 2));
+
+    const response = await client.CreateAigcImageTask(taskData);
+
+    console.log('API 响应:', JSON.stringify(response, null, 2));
+
+    return {
+      TaskId: response.TaskId,
+      RequestId: response.RequestId,
+    };
+  } catch (error) {
+    console.error('CreateAigcImageTask 调用失败:', error);
+    throw new Error(`创建图片任务失败: ${error.message}`);
+  }
+};
+
+/**
+ * 查询图片任务详情（复用 DescribeTaskDetail）
+ * @param {string} taskId - 任务 ID
+ * @returns {Promise<Object>}
+ */
+const queryImageTaskStatus = async (taskId) => {
+  try {
+    console.log('查询图片任务状态:', taskId);
+
+    const params = {
+      TaskId: taskId,
+      SubAppId: parseInt(process.env.VOD_SUB_APP_ID),
+    };
+
+    const response = await client.DescribeTaskDetail(params);
+
+    console.log('图片任务状态:', response.Status);
+
+    return {
+      Status: response.Status,
+      TaskType: response.TaskType,
+      CreateTime: response.CreateTime,
+      BeginProcessTime: response.BeginProcessTime,
+      FinishTime: response.FinishTime,
+      AigcImageTask: response.AigcImageTask,
+      RequestId: response.RequestId,
+    };
+  } catch (error) {
+    console.error('查询图片任务状态失败:', error);
+    throw new Error(`查询图片任务状态失败: ${error.message}`);
+  }
+};
+
 module.exports = {
   createAigcVideoTask,
   queryTaskStatus,
+  createAigcImageTask,
+  queryImageTaskStatus,
 };
