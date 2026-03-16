@@ -884,7 +884,7 @@ const VideoGenForm = () => {
                 rules={[{ required: true, message: '请输入 Prompt！' }]}
                 style={{ marginBottom: 12 }}
               >
-                <Input.TextArea rows={5} placeholder="请详细描述您想要生成的视频内容..." maxLength={500} showCount />
+                <Input.TextArea rows={5} placeholder="请详细描述您想要生成的视频内容..." maxLength={1000} showCount />
               </Form.Item>
 
               <Form.Item

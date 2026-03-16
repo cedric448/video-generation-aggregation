@@ -35,6 +35,9 @@ function App() {
       <div className="App">
         <header className="App-header">
           <h1>AI 视频 / 图片生成工具</h1>
+          <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>
+            生成过程中请勿刷新页面，直到生成结束
+          </p>
         </header>
         <main className="App-main">
           <Tabs
