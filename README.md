@@ -54,7 +54,7 @@
 | GEM (Gemini) | 3.0 (nano banana pro) | — | 1K / 2K / 4K | 3 张 | 10 种比例 |
 | GEM (Gemini) | 3.1 (nano banana2) | 2.5 ✦ | — | 3 张 | 10 种比例 |
 | Qwen (千问) | 0925 | 0925 ✦ | — | 1 张 | 不支持 |
-| Seedream (豆包) | 5.0-lite / 4.5 | 5.0-lite ✦ | — | 1 张 | 7 种比例 |
+| Seedream (豆包) | 5.0-lite / 4.5 | 5.0-lite ✦ | 2K / 4K | 1 张 | 7 种比例 |
 | Kling (可灵) | 3.0-Omni / 3.0 / 2.1 | 3.0-Omni ✦ | 1K / 2K | 1 张 | 8 种比例 |
 | Vidu | q3-pro / q3 / q3-turbo / q2 | q3-pro ✦ | 1080P / 2K / 4K | q2: 7 张；其余: 1 张 | 8 种比例 |
 | Jimeng (即梦) | 4.0 | 4.0 ✦ | — | 1 张 | 7 种比例 |
