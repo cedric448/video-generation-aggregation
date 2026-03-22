@@ -65,11 +65,10 @@ const IMAGE_MODEL_CONFIG = {
     label: 'Seedream (豆包)',
     versions: ['5.0-lite', '4.5'],
     defaultVersion: '5.0-lite',
-    supportsAspectRatio: true,
-    aspectRatio: { options: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], default: '1:1' },
+    supportsAspectRatio: false, // Seedream 不支持 AspectRatio/Resolution，否则会触发尺寸不足报错
     versionCapabilities: {
-      '5.0-lite': { maxImages: 1, resolution: { options: ['2K', '4K'], default: '2K' } },
-      '4.5': { maxImages: 1, resolution: { options: ['2K', '4K'], default: '2K' } },
+      '5.0-lite': { maxImages: 1 },
+      '4.5': { maxImages: 1 },
     },
   },
   Kling: {
