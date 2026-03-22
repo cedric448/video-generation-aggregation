@@ -88,10 +88,10 @@ const MODEL_CONFIG = {
   },
   Vidu: {
     label: 'Vidu',
-    versions: ['q3-pro', 'q2', 'q2-pro', 'q2-turbo'],
+    versions: ['q3-pro', 'q2', 'q2-pro', 'q2-turbo', 'q3-turbo'],
     defaultVersion: 'q3-pro',
     supportsImageInput: true,
-    supportsLastFrame: true,    // q2-pro / q2-turbo 支持；q3-pro 不支持
+    supportsLastFrame: true,    // q2-pro / q2-turbo / q3-turbo 支持；q3-pro 不支持
     supportsAspectRatio: true,
     supportsAudio: true,
     resolution: { options: ['720P', '1080P'], default: '720P' },
@@ -111,6 +111,7 @@ const MODEL_CONFIG = {
       'q2': { supportsLastFrame: false, supportsMultiImage: true, maxImages: 7 },
       'q2-pro': { supportsLastFrame: true, supportsMultiImage: false },
       'q2-turbo': { supportsLastFrame: true, supportsMultiImage: false },
+      'q3-turbo': { supportsLastFrame: true, supportsMultiImage: false },
     },
   },
   GV: {
