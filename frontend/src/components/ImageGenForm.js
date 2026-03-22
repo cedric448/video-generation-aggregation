@@ -68,8 +68,8 @@ const IMAGE_MODEL_CONFIG = {
     supportsAspectRatio: true,
     aspectRatio: { options: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], default: '1:1' },
     versionCapabilities: {
-      '5.0-lite': { maxImages: 1 },
-      '4.5': { maxImages: 1 },
+      '5.0-lite': { maxImages: 1, resolution: { options: ['2K', '4K'], default: '2K' } },
+      '4.5': { maxImages: 1, resolution: { options: ['2K', '4K'], default: '2K' } },
     },
   },
   Kling: {
