@@ -85,14 +85,11 @@ const IMAGE_MODEL_CONFIG = {
   },
   Vidu: {
     label: 'Vidu',
-    versions: ['q3-pro', 'q3', 'q3-turbo', 'q2'],
-    defaultVersion: 'q3-pro',
+    versions: ['q2'],
+    defaultVersion: 'q2',
     supportsAspectRatio: true,
     aspectRatio: { options: ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9', '2:3', '3:2'], default: '1:1' },
     versionCapabilities: {
-      'q3-pro': { maxImages: 1, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1080P', '2K', '4K'], default: '1080P' } },
-      'q3': { maxImages: 1, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1080P', '2K', '4K'], default: '1080P' } },
-      'q3-turbo': { maxImages: 1, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1080P', '2K', '4K'], default: '1080P' } },
       'q2': { maxImages: 7, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1080P', '2K', '4K'], default: '1080P' } },
     },
   },
