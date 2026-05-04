@@ -28,19 +28,22 @@
 | 模型 | 版本 | 默认版本 | 支持音频 | 支持首尾帧 | 备注 |
 |------|------|---------|---------|----------|------|
 | 海螺 (Hailuo) | 2.3-fast / 2.3 / 02 | 2.3-fast | — | — | 支持 768P/1080P |
-| 可灵 (Kling) | 3.0-Omni / 3.0 / 2.6 / 2.5 / 2.1 / 2.0 / 1.6 / O1 | 3.0-Omni | ✓ | 2.6 / 2.1 | 2.6 首尾帧时仅无声 |
+| 可灵 (Kling) | 3.0-Omni / 3.0 / 2.6 / 2.5 / 2.1 / 2.0 / 1.6 / O1 | 3.0-Omni | ✓ | 2.6 / 2.1 | 2.6 首尾帧时仅无声；3.0/3.0-Omni 支持 4K |
 | 即梦 (Jimeng) | 3.0pro | 3.0pro | — | — | |
-| Vidu | q3-pro / q2 / q2-pro / q2-turbo / q3-turbo | q3-pro | ✓ | q2-pro / q2-turbo / q3-turbo | q2 支持多图（≤7 张） |
+| Vidu | q3-pro / q3-mix / q2 / q2-pro / q2-turbo / q3-turbo | q3-pro | ✓ | q2-pro / q2-turbo / q3-turbo | q2 支持多图（≤7 张）；q3-mix 不支持主体库 |
 | Google Veo (GV) | 3.1 / 3.1-fast | 3.1-fast | ✓ | ✓（单图时） | 多图时首尾帧不可用（≤3 张） |
 | 混元 (Hunyuan) | 1.5 | 1.5 | — | — | |
 | 明眸 (Mingmou) | 1.0 | 1.0 | — | — | |
 | 豆包 (Seedance) | 1.5-pro / 1.0-pro / 1.0-pro-fast / 1.0-lite-i2v | 1.5-pro | 1.5-pro | — | 1.5-pro 最高 720P |
 | OpenAI Sora (OS) | 2.0 | 2.0 | 始终开启 | — | 默认生成音频，无开关 |
+| Pixverse (爱诗) | V5.6 / V6.0 / C1 | V5.6 | ✓ | — | V5.6 写实通用；V6.0 电影级；C1 影视特效垂直 |
+| 快乐马 (H2) | 1.0 | 1.0 | ✓ | — | 支持多图参考（1-9 张）；时长 3-15 秒；支持 720P/1080P/2K/4K |
 
 ### 视频生成 FileInfos 规则
 
-- 支持首尾帧模式时，首帧最多 1 张，尾帧通过独立上传区传入（LastFrameUrl）
-- Vidu q2 多图：最多 7 张
+- 支持首尾帧模式时，首帧最多 1 张（Usage=FirstFrame），尾帧通过独立上传区传入（LastFrameUrl）
+- 参考帧模式（多图）时，每张图片传 Usage=Reference
+- Vidu q2 多图：最多 7 张；H2 多图：最多 9 张
 - GV 多图：最多 3 张；上传 2 张及以上时首尾帧自动禁用
 - 图片格式：JPEG / PNG，≤10MB；视频 ≤100MB
 
@@ -59,6 +62,7 @@
 | Vidu | q2 | q2 ✦ | 1080P / 2K / 4K | 7 张 | 8 种比例 |
 | Jimeng (即梦) | 4.0 | 4.0 ✦ | — | 1 张 | 7 种比例 |
 | Hunyuan (混元) | 3.0 | 3.0 ✦ | 720P / 1080P / 2K / 4K | 1 张 | 8 种比例 |
+| GPT-Image2 (OG) | image2_low / image2_medium / image2_high | image2_low ✦ | 1K / 2K / 4K | 3 张 | 9 种比例 |
 
 ### 图片生成 FileInfos 规则
 
@@ -330,6 +334,15 @@ http://your-domain:9999
 图片生成的 `FileInfos` 不需要传 `Category` 字段（视频生成才需要）。
 
 ## 更新日志
+
+### v1.4.0 (2026-05-04)
+
+- **新增视频模型 H2（快乐马）1.0**: 支持文生、首帧生、参考生（最多 9 张图）；时长 3-15 秒自由输入；分辨率 720P/1080P/2K/4K；宽高比 16:9/9:16/1:1/3:4/4:3；支持音频
+- **新增视频模型 Pixverse（爱诗）**: 版本 V5.6（写实通用）/ V6.0（电影级）/ C1（影视特效垂直）；支持首帧生成、音频
+- **新增 Vidu q3-mix**: 画面质感强，支持智能切镜，动态效果好；暂不支持主体库
+- **Kling 4K 支持**: 3.0 / 3.0-Omni 版本新增 4K 分辨率选项（需联系腾讯云开通）
+- **新增图片模型 GPT-Image2（OG）**: 版本 image2_low / image2_medium / image2_high；分辨率 1K/2K/4K；宽高比 9 种；最多 3 张参考图；支持 WEBP 格式
+- **FileInfos.N 新增 Usage 字段**: 首帧传 `Usage: "FirstFrame"`，参考帧传 `Usage: "Reference"`（兼容旧版 SDK）
 
 ### v1.3.0 (2026-03-08)
 

@@ -66,8 +66,8 @@ const MODEL_CONFIG = {
     // 版本级别的特殊限制
     versionCapabilities: {
       '2.6': { supportsLastFrame: true, audioWithLastFrame: false }, // 2.6 首尾帧时只能无声
-      '3.0': { supportsLastFrame: false },
-      '3.0-Omni': { supportsLastFrame: false },
+      '3.0': { supportsLastFrame: false, resolution: { options: ['720P', '1080P', '4K'], default: '720P' } },
+      '3.0-Omni': { supportsLastFrame: false, resolution: { options: ['720P', '1080P', '4K'], default: '720P' } },
       '2.5': { supportsLastFrame: false },
       '2.1': { supportsLastFrame: true },
       '2.0': { supportsLastFrame: false },
@@ -88,10 +88,10 @@ const MODEL_CONFIG = {
   },
   Vidu: {
     label: 'Vidu',
-    versions: ['q3-pro', 'q2', 'q2-pro', 'q2-turbo', 'q3-turbo'],
+    versions: ['q3-pro', 'q3-mix', 'q2', 'q2-pro', 'q2-turbo', 'q3-turbo'],
     defaultVersion: 'q3-pro',
     supportsImageInput: true,
-    supportsLastFrame: true,    // q2-pro / q2-turbo / q3-turbo 支持；q3-pro 不支持
+    supportsLastFrame: true,    // q2-pro / q2-turbo / q3-turbo 支持；q3-pro / q3-mix 不支持
     supportsAspectRatio: true,
     supportsAudio: true,
     resolution: { options: ['720P', '1080P'], default: '720P' },
@@ -108,6 +108,7 @@ const MODEL_CONFIG = {
     // 版本级别的特殊限制
     versionCapabilities: {
       'q3-pro': { supportsLastFrame: false, supportsMultiImage: false, textAndImageOnly: true },
+      'q3-mix': { supportsLastFrame: false, supportsMultiImage: false, textAndImageOnly: true }, // 暂不支持主体库
       'q2': { supportsLastFrame: false, supportsMultiImage: true, maxImages: 7 },
       'q2-pro': { supportsLastFrame: true, supportsMultiImage: false },
       'q2-turbo': { supportsLastFrame: true, supportsMultiImage: false },
@@ -179,6 +180,39 @@ const MODEL_CONFIG = {
     duration: { options: [4, 8, 12], default: 8, unit: '秒' },
     aspectRatio: { options: ['16:9', '9:16'], default: '16:9', note: '仅文生视频时可用' },
   },
+  Pixverse: {
+    label: 'Pixverse (爱诗)',
+    versions: ['V5.6', 'V6.0', 'C1'],
+    defaultVersion: 'V5.6',
+    supportsImageInput: true,
+    supportsLastFrame: false,
+    supportsAspectRatio: true,
+    supportsAudio: true,
+    resolution: { options: ['720P', '1080P'], default: '720P' },
+    duration: { options: [5, 8, 10], default: 5, unit: '秒' },
+    aspectRatio: { options: ['16:9', '9:16', '1:1', '4:3', '3:4'], default: '16:9' },
+    versionCapabilities: {
+      'V5.6': { supportsLastFrame: false },
+      'V6.0': { supportsLastFrame: false },
+      'C1': { supportsLastFrame: false },
+    },
+  },
+  H2: {
+    label: '快乐马 (H2)',
+    versions: ['1.0'],
+    defaultVersion: '1.0',
+    supportsImageInput: true,   // 支持首帧生、参考生（1-9 张）
+    supportsLastFrame: false,
+    supportsAspectRatio: true,
+    supportsAudio: true,
+    resolution: { options: ['720P', '1080P', '2K', '4K'], default: '720P' },
+    duration: { options: [], default: 5, min: 3, max: 15, unit: '秒', freeInput: true },
+    aspectRatio: { options: ['16:9', '9:16', '1:1', '3:4', '4:3'], default: '16:9' },
+    // H2 支持多图参考（1-9 张）
+    versionCapabilities: {
+      '1.0': { supportsLastFrame: false, supportsMultiImage: true, maxImages: 9 },
+    },
+  },
 };
 
 // 获取当前版本实际能力（合并模型级 + 版本级覆盖）
@@ -213,13 +247,18 @@ const VideoGenForm = () => {
   const modelCfg = MODEL_CONFIG[selectedModel] || MODEL_CONFIG.Hailuo;
   const versionCaps = getVersionCaps(selectedModel, selectedVersion);
 
-  // Seedance 1.5-pro 不支持 1080P，动态计算分辨率选项
+  // Seedance 1.5-pro 不支持 1080P，Kling 部分版本支持 4K，动态计算分辨率选项
   const resoliutionOptions = (() => {
     if (selectedModel === 'Seedance') {
       const cap = modelCfg.versionCapabilities?.[selectedVersion];
       if (cap?.maxResolution === '720P') {
         return ['720P'];
       }
+    }
+    // 版本级别分辨率覆盖（如 Kling 3.0 / 3.0-Omni 支持 4K）
+    const vCap = modelCfg.versionCapabilities?.[selectedVersion];
+    if (vCap?.resolution) {
+      return vCap.resolution.options;
     }
     return modelCfg.resolution.options;
   })();
@@ -243,11 +282,9 @@ const VideoGenForm = () => {
   const maxFiles = (() => {
     // 支持首尾帧的模式下，首帧只能 1 张
     if (canLastFrame && !gvMultiImage) return 1;
-    // Vidu q2 支持多图，最多 7 张
-    if (selectedModel === 'Vidu') {
-      const vCap = modelCfg.versionCapabilities?.[selectedVersion];
-      if (vCap?.maxImages) return vCap.maxImages;
-    }
+    // 版本级别 maxImages 覆盖（Vidu q2、H2 等多图模式）
+    const vCap = modelCfg.versionCapabilities?.[selectedVersion];
+    if (vCap?.maxImages) return vCap.maxImages;
     // GV 多图最多 3 张
     if (selectedModel === 'GV') return 3;
     // 其他模型默认 1 张
@@ -455,15 +492,20 @@ const VideoGenForm = () => {
       //   1. 支持首尾帧时，FileInfos 只放 1 张首帧（尾帧走 LastFrameUrl）
       //   2. Vidu q2 多图：最多 7 张
       //   3. GV 多图：最多 3 张，不传尾帧
-      //   4. 其他：最多 1 张，最多 3 张（API 上限）
+      //   4. H2 多图：最多 9 张
+      //   5. 其他：最多 1 张
+      // Usage 参数：FirstFrame（首帧）/ Reference（参考帧）
       let fileInfos = undefined;
       if (cfg.supportsImageInput && uploadedFiles.length > 0) {
         // 取前 maxFiles 张（多传按上限截断）
         const filesToSend = uploadedFiles.slice(0, maxFiles);
+        // 判断是首帧模式还是参考帧模式
+        const isFirstFrameMode = canLastFrame && !gvMultiImage && filesToSend.length === 1;
         fileInfos = filesToSend.map((f) => ({
           Type: 'Url',
           Url: f.url,
           Category: f.type === 'image' ? 'Image' : 'Video',
+          Usage: isFirstFrameMode ? 'FirstFrame' : 'Reference',
         }));
       }
 
@@ -549,12 +591,14 @@ const VideoGenForm = () => {
     setLastFrameFile(null);
     setLastFrameFileList([]);
 
-    // 计算默认分辨率（Seedance 1.5-pro 不支持 1080P）
+    // 计算默认分辨率（考虑版本级别覆盖）
     let defaultResolution = cfg.resolution.default;
     if (value === 'Seedance') {
       const vCap = cfg.versionCapabilities?.[newVersion];
       if (vCap?.maxResolution === '720P') defaultResolution = '720P';
     }
+    const vCap = cfg.versionCapabilities?.[newVersion];
+    if (vCap?.resolution) defaultResolution = vCap.resolution.default;
 
     form.setFieldsValue({
       modelVersion: newVersion,
@@ -579,6 +623,12 @@ const VideoGenForm = () => {
       if (cap?.maxResolution === '720P') {
         form.setFieldsValue({ resolution: '720P' });
       }
+    }
+
+    // 版本级别分辨率覆盖（如 Kling 3.0 / 3.0-Omni 支持 4K）
+    const vCap = modelCfg.versionCapabilities?.[value];
+    if (vCap?.resolution) {
+      form.setFieldsValue({ resolution: vCap.resolution.default });
     }
 
     // Kling: 不支持首尾帧的版本，若已选有声则不影响（首尾帧 UI 动态隐藏）
@@ -790,13 +840,14 @@ const VideoGenForm = () => {
                     label={
                       <span>
                         {showLastFrame ? '首帧' : '参考文件'} <RequiredMark />&nbsp;
-                        <Tooltip title={(() => {
+                        <Tooltip title=                        {(() => {
                           if (showLastFrame) return '首帧图片：仅 1 张，JPEG/PNG，≤10MB';
                           if (selectedModel === 'Vidu') {
                             const vCap = modelCfg.versionCapabilities?.[selectedVersion];
-                            if (vCap?.textAndImageOnly) return 'q3-pro 支持文生和图生（单图），JPEG/PNG，≤10MB';
+                            if (vCap?.textAndImageOnly) return 'q3-pro / q3-mix 支持文生和图生（单图），JPEG/PNG，≤10MB';
                             if (vCap?.maxImages) return `q2 支持多图参考（1-${vCap.maxImages} 张），JPEG/PNG，≤10MB`;
                           }
+                          if (selectedModel === 'H2') return `H2 支持多图参考（1-9 张），JPEG/PNG，≤10MB`;
                           if (selectedModel === 'GV') return `最多 ${maxFiles} 张，多图时首尾帧不可用，JPEG/PNG，≤10MB`;
                           return 'JPEG/PNG 图片（≤10MB）或视频（≤100MB），最多 1 张';
                         })()}>

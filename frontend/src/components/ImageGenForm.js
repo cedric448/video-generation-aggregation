@@ -113,6 +113,23 @@ const IMAGE_MODEL_CONFIG = {
       '3.0': { maxImages: 1, resolution: { options: ['720P', '1080P', '2K', '4K'], default: '720P' } },
     },
   },
+  OG: {
+    label: 'GPT-Image2 (OG)',
+    versions: ['image2_low', 'image2_medium', 'image2_high'],
+    defaultVersion: 'image2_low',
+    versionLabels: {
+      'image2_low': 'image2_low（低画质）',
+      'image2_medium': 'image2_medium（中画质）',
+      'image2_high': 'image2_high（高画质）',
+    },
+    supportsAspectRatio: true,
+    aspectRatio: { options: ['1:1', '3:2', '2:3', '3:4', '4:3', '16:9', '9:16', '21:9', '9:21'], default: '1:1' },
+    versionCapabilities: {
+      'image2_low': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
+      'image2_medium': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
+      'image2_high': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
+    },
+  },
 };
 
 const RequiredMark = () => (
