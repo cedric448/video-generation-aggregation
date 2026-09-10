@@ -135,9 +135,68 @@ const queryImageTaskStatus = async (taskId) => {
   }
 };
 
+/**
+ * 创建 AIGC 音频生成任务（文生音效 / 视频生音效 / 生音乐）
+ * @param {Object} taskData - 任务参数
+ * @returns {Promise<{TaskId: string, RequestId: string}>}
+ */
+const createAigcAudioTask = async (taskData) => {
+  try {
+    console.log('调用腾讯云 CreateAigcAudioTask API...');
+    console.log('请求参数:', JSON.stringify(taskData, null, 2));
+
+    const response = await client.CreateAigcAudioTask(taskData);
+
+    console.log('API 响应:', JSON.stringify(response, null, 2));
+
+    return {
+      TaskId: response.TaskId,
+      RequestId: response.RequestId,
+    };
+  } catch (error) {
+    console.error('CreateAigcAudioTask 调用失败:', error);
+    throw new Error(`创建音频任务失败: ${error.message}`);
+  }
+};
+
+/**
+ * 查询音频任务详情（复用 DescribeTaskDetail）
+ * @param {string} taskId - 任务 ID
+ * @returns {Promise<Object>}
+ */
+const queryAudioTaskStatus = async (taskId) => {
+  try {
+    console.log('查询音频任务状态:', taskId);
+
+    const params = {
+      TaskId: taskId,
+      SubAppId: parseInt(process.env.VOD_SUB_APP_ID),
+    };
+
+    const response = await client.DescribeTaskDetail(params);
+
+    console.log('音频任务状态:', response.Status);
+
+    return {
+      Status: response.Status,
+      TaskType: response.TaskType,
+      CreateTime: response.CreateTime,
+      BeginProcessTime: response.BeginProcessTime,
+      FinishTime: response.FinishTime,
+      AigcAudioTask: response.AigcAudioTask,
+      RequestId: response.RequestId,
+    };
+  } catch (error) {
+    console.error('查询音频任务状态失败:', error);
+    throw new Error(`查询音频任务状态失败: ${error.message}`);
+  }
+};
+
 module.exports = {
   createAigcVideoTask,
   queryTaskStatus,
   createAigcImageTask,
   queryImageTaskStatus,
+  createAigcAudioTask,
+  queryAudioTaskStatus,
 };

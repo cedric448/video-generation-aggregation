@@ -8,6 +8,7 @@ const fs = require('fs');
 const cosService = require('./services/cosService');
 const vodService = require('./services/vodService');
 const stsService = require('./services/stsService');
+const { buildVideoTaskPayload, buildImageTaskPayload, buildAudioTaskPayload } = require('./services/taskBuilder');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -69,6 +70,41 @@ const upload = multer({
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+/**
+ * 将私有 COS URL 替换为预签名 URL（VOD 需要能公开访问文件）
+ * 仅处理属于本应用 COS Bucket 的 URL，外部 URL 原样返回
+ */
+const signCosUrlIfNeeded = async (url) => {
+  if (!url) return url;
+  try {
+    const urlObj = new URL(url);
+    const bucket = process.env.COS_BUCKET;
+    if (bucket && !urlObj.hostname.includes(bucket)) {
+      return url;
+    }
+    const key = decodeURIComponent(urlObj.pathname.replace(/^\//, ''));
+    return await cosService.getSignedUrl(key, 3600);
+  } catch (error) {
+    console.warn('生成预签名 URL 失败，使用原 URL:', url, error.message);
+    return url;
+  }
+};
+
+/**
+ * 批量替换文件列表中的 COS URL（FileInfos / VideoInfos / AudioInfos）
+ */
+const signFileInfos = async (fileInfos) => {
+  if (!fileInfos || fileInfos.length === 0) return fileInfos;
+  return Promise.all(
+    fileInfos.map(async (fileInfo) => {
+      if (fileInfo.Type === 'Url' && fileInfo.Url) {
+        return { ...fileInfo, Url: await signCosUrlIfNeeded(fileInfo.Url) };
+      }
+      return fileInfo;
+    })
+  );
+};
 
 // 获取 COS 临时密钥接口 (用于前端直传)
 app.get('/api/sts/credentials', async (req, res) => {
@@ -137,46 +173,22 @@ app.post('/api/video/create', async (req, res) => {
   try {
     console.log('创建视频生成任务:', JSON.stringify(req.body, null, 2));
 
-    // 对 FileInfos 中的私有 COS URL 替换为预签名 URL（VOD 需要能公开访问文件）
-    let fileInfos = req.body.FileInfos;
+    const fileInfos = await signFileInfos(req.body.FileInfos);
     if (fileInfos && fileInfos.length > 0) {
-      fileInfos = await Promise.all(
-        fileInfos.map(async (fileInfo) => {
-          if (fileInfo.Type === 'Url' && fileInfo.Url) {
-            // 从 URL 中提取 COS key
-            const urlObj = new URL(fileInfo.Url);
-            const key = decodeURIComponent(urlObj.pathname.replace(/^\//, ''));
-            const signedUrl = await cosService.getSignedUrl(key, 3600);
-            return { ...fileInfo, Url: signedUrl };
-          }
-          return fileInfo;
-        })
-      );
       console.log('已将 FileInfos URL 替换为预签名 URL');
     }
+    const lastFrameUrl = await signCosUrlIfNeeded(req.body.LastFrameUrl);
 
-    const taskData = {
-      SubAppId: parseInt(process.env.VOD_SUB_APP_ID),
-      ModelName: req.body.ModelName,
-      ModelVersion: req.body.ModelVersion,
-      FileInfos: fileInfos && fileInfos.length > 0 ? fileInfos : undefined,
-      Prompt: req.body.Prompt,
-      ...(req.body.NegativePrompt ? { NegativePrompt: req.body.NegativePrompt } : {}),
-      EnhancePrompt: req.body.EnhancePrompt || 'Enabled',
-      OutputConfig: {
-        StorageMode: req.body.OutputConfig?.StorageMode || 'Permanent',
-        Resolution: req.body.OutputConfig?.Resolution || '720P',
-        PersonGeneration: req.body.OutputConfig?.PersonGeneration || 'AllowAdult',
-        InputComplianceCheck: req.body.OutputConfig?.InputComplianceCheck || 'Disabled',
-        OutputComplianceCheck: req.body.OutputConfig?.OutputComplianceCheck || 'Disabled',
-        ...(req.body.OutputConfig?.Duration ? { Duration: Number(req.body.OutputConfig.Duration) } : {}),
-        ...(req.body.OutputConfig?.AspectRatio ? { AspectRatio: req.body.OutputConfig.AspectRatio } : {}),
-        ...(req.body.OutputConfig?.AudioGeneration ? { AudioGeneration: req.body.OutputConfig.AudioGeneration } : {}),
-        ...(req.body.OutputConfig?.EnhanceSwitch ? { EnhanceSwitch: req.body.OutputConfig.EnhanceSwitch } : {}),
+    const taskData = buildVideoTaskPayload(
+      {
+        ...req.body,
+        FileInfos: fileInfos,
+        LastFrameUrl: lastFrameUrl,
+        EnhancePrompt: req.body.EnhancePrompt || 'Enabled',
+        InputRegion: req.body.InputRegion || 'Mainland',
       },
-      InputRegion: req.body.InputRegion || 'Mainland',
-      ...(req.body.SceneType ? { SceneType: req.body.SceneType } : {}),
-    };
+      { subAppId: parseInt(process.env.VOD_SUB_APP_ID) }
+    );
 
     const result = await vodService.createAigcVideoTask(taskData);
 
@@ -203,41 +215,20 @@ app.post('/api/image/create', async (req, res) => {
   try {
     console.log('创建图片生成任务:', JSON.stringify(req.body, null, 2));
 
-    // 对 FileInfos 中的私有 COS URL 替换为预签名 URL
-    let fileInfos = req.body.FileInfos;
+    const fileInfos = await signFileInfos(req.body.FileInfos);
     if (fileInfos && fileInfos.length > 0) {
-      fileInfos = await Promise.all(
-        fileInfos.map(async (fileInfo) => {
-          if (fileInfo.Type === 'Url' && fileInfo.Url) {
-            const urlObj = new URL(fileInfo.Url);
-            const key = decodeURIComponent(urlObj.pathname.replace(/^\//, ''));
-            const signedUrl = await cosService.getSignedUrl(key, 3600);
-            return { ...fileInfo, Url: signedUrl };
-          }
-          return fileInfo;
-        })
-      );
       console.log('已将 FileInfos URL 替换为预签名 URL');
     }
 
-    const taskData = {
-      SubAppId: parseInt(process.env.VOD_SUB_APP_ID),
-      ModelName: req.body.ModelName,
-      ModelVersion: req.body.ModelVersion,
-      FileInfos: fileInfos && fileInfos.length > 0 ? fileInfos : undefined,
-      Prompt: req.body.Prompt,
-      ...(req.body.NegativePrompt ? { NegativePrompt: req.body.NegativePrompt } : {}),
-      EnhancePrompt: req.body.EnhancePrompt || 'Enabled',
-      OutputConfig: {
-        StorageMode: req.body.OutputConfig?.StorageMode || 'Permanent',
-        PersonGeneration: req.body.OutputConfig?.PersonGeneration || 'AllowAdult',
-        InputComplianceCheck: req.body.OutputConfig?.InputComplianceCheck || 'Disabled',
-        OutputComplianceCheck: req.body.OutputConfig?.OutputComplianceCheck || 'Disabled',
-        ...(req.body.OutputConfig?.AspectRatio ? { AspectRatio: req.body.OutputConfig.AspectRatio } : {}),
-        ...(req.body.OutputConfig?.Resolution ? { Resolution: req.body.OutputConfig.Resolution } : {}),
+    const taskData = buildImageTaskPayload(
+      {
+        ...req.body,
+        FileInfos: fileInfos,
+        EnhancePrompt: req.body.EnhancePrompt || 'Enabled',
+        InputRegion: req.body.InputRegion || 'Mainland',
       },
-      InputRegion: req.body.InputRegion || 'Mainland',
-    };
+      { subAppId: parseInt(process.env.VOD_SUB_APP_ID) }
+    );
 
     const result = await vodService.createAigcImageTask(taskData);
 
@@ -255,6 +246,43 @@ app.post('/api/image/create', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || '创建图片任务失败',
+    });
+  }
+});
+
+// 创建音频生成任务（文生音效 / 视频生音效 / 生音乐）
+app.post('/api/audio/create', async (req, res) => {
+  try {
+    console.log('创建音频生成任务:', JSON.stringify(req.body, null, 2));
+
+    const videoInfos = await signFileInfos(req.body.VideoInfos);
+    const audioInfos = await signFileInfos(req.body.AudioInfos);
+
+    const taskData = buildAudioTaskPayload(
+      {
+        ...req.body,
+        VideoInfos: videoInfos,
+        AudioInfos: audioInfos,
+      },
+      { subAppId: parseInt(process.env.VOD_SUB_APP_ID) }
+    );
+
+    const result = await vodService.createAigcAudioTask(taskData);
+
+    console.log('音频任务创建成功:', result.TaskId);
+
+    res.json({
+      success: true,
+      data: {
+        taskId: result.TaskId,
+        requestId: result.RequestId,
+      },
+    });
+  } catch (error) {
+    console.error('创建音频任务失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || '创建音频任务失败',
     });
   }
 });
@@ -278,6 +306,29 @@ app.get('/api/image/status/:taskId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || '查询图片任务状态失败',
+    });
+  }
+});
+
+// 查询音频任务状态
+app.get('/api/audio/status/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    console.log('查询音频任务状态:', taskId);
+
+    const result = await vodService.queryAudioTaskStatus(taskId);
+
+    console.log('音频任务状态:', result.Status);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('查询音频任务状态失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || '查询音频任务状态失败',
     });
   }
 });

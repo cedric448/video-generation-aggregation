@@ -1,9 +1,10 @@
 import React from 'react';
 import { ConfigProvider, Tabs } from 'antd';
-import { VideoCameraOutlined, PictureOutlined } from '@ant-design/icons';
+import { VideoCameraOutlined, PictureOutlined, CustomerServiceOutlined } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import VideoGenForm from './components/VideoGenForm';
 import ImageGenForm from './components/ImageGenForm';
+import AudioGenForm from './components/AudioGenForm';
 import './App.css';
 
 function App() {
@@ -27,6 +28,16 @@ function App() {
         </span>
       ),
       children: <ImageGenForm />,
+    },
+    {
+      key: 'audio',
+      label: (
+        <span style={{ fontSize: 15, padding: '0 4px' }}>
+          <CustomerServiceOutlined style={{ marginRight: 6 }} />
+          音频生成
+        </span>
+      ),
+      children: <AudioGenForm />,
     },
   ];
 

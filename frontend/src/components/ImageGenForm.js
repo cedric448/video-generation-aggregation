@@ -13,6 +13,7 @@ import {
   Spin,
   Collapse,
   Tooltip,
+  InputNumber,
 } from 'antd';
 import {
   UploadOutlined,
@@ -27,110 +28,20 @@ import {
 } from '@ant-design/icons';
 import { createAigcImageTask, queryImageTaskStatus } from '../services/api';
 import { uploadFileToCOS } from '../services/cosService';
+import {
+  IMAGE_MODEL_CONFIG,
+  getImageVersionCaps,
+  getImageResolutionConfig,
+  getImageAspectRatioConfig,
+  buildImageOutputConfig,
+  buildImageTaskData,
+} from '../config/imageModels';
+import { normalizeExtInfo } from '../config/videoModels';
 import './VideoGenForm.css';
 
 // =====================================================================
-// 图片生成模型配置
+// 图片生成模型配置见 src/config/imageModels.js（依据 VOD AIGC 接入指南）
 // =====================================================================
-const IMAGE_MODEL_CONFIG = {
-  GEM: {
-    label: 'GEM (Gemini)',
-    versions: ['2.5', '3.0', '3.1'],
-    defaultVersion: '2.5',
-    versionLabels: {
-      '2.5': '2.5 (nano banana)',
-      '3.0': '3.0 (nano banana pro)',
-      '3.1': '3.1 (nano banana2)',
-    },
-    supportsAspectRatio: true,
-    // GEM 所有版本宽高比相同
-    aspectRatio: { options: ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'], default: '1:1' },
-    // 版本级别能力
-    versionCapabilities: {
-      '2.5': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
-      '3.0': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
-      '3.1': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'] }, // 3.1 无分辨率字段
-    },
-  },
-  Qwen: {
-    label: 'Qwen (千问)',
-    versions: ['0925'],
-    defaultVersion: '0925',
-    supportsAspectRatio: false, // Qwen 暂不支持宽高比
-    versionCapabilities: {
-      '0925': { maxImages: 1 },
-    },
-  },
-  Seedream: {
-    label: 'Seedream (豆包)',
-    versions: ['5.0-lite', '4.5'],
-    defaultVersion: '5.0-lite',
-    supportsAspectRatio: false, // Seedream 不支持 AspectRatio/Resolution，否则会触发尺寸不足报错
-    versionCapabilities: {
-      '5.0-lite': { maxImages: 1 },
-      '4.5': { maxImages: 1 },
-    },
-  },
-  Kling: {
-    label: 'Kling (可灵)',
-    versions: ['3.0-Omni', '3.0', '2.1'],
-    defaultVersion: '3.0-Omni',
-    supportsAspectRatio: true,
-    aspectRatio: { options: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'], default: '1:1' },
-    versionCapabilities: {
-      '3.0-Omni': { maxImages: 1, resolution: { options: ['1K', '2K'], default: '1K' } },
-      '3.0': { maxImages: 1, resolution: { options: ['1K', '2K'], default: '1K' } },
-      '2.1': { maxImages: 1, resolution: { options: ['1K', '2K'], default: '1K' } },
-    },
-  },
-  Vidu: {
-    label: 'Vidu',
-    versions: ['q2'],
-    defaultVersion: 'q2',
-    supportsAspectRatio: true,
-    aspectRatio: { options: ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9', '2:3', '3:2'], default: '1:1' },
-    versionCapabilities: {
-      'q2': { maxImages: 7, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1080P', '2K', '4K'], default: '1080P' } },
-    },
-  },
-  Jimeng: {
-    label: 'Jimeng (即梦)',
-    versions: ['4.0'],
-    defaultVersion: '4.0',
-    supportsAspectRatio: true,
-    aspectRatio: { options: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], default: '1:1' },
-    versionCapabilities: {
-      '4.0': { maxImages: 1 },
-    },
-  },
-  Hunyuan: {
-    label: 'Hunyuan (混元)',
-    versions: ['3.0'],
-    defaultVersion: '3.0',
-    supportsAspectRatio: true,
-    aspectRatio: { options: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'], default: '1:1' },
-    versionCapabilities: {
-      '3.0': { maxImages: 1, resolution: { options: ['720P', '1080P', '2K', '4K'], default: '720P' } },
-    },
-  },
-  OG: {
-    label: 'GPT-Image2 (OG)',
-    versions: ['image2_low', 'image2_medium', 'image2_high'],
-    defaultVersion: 'image2_low',
-    versionLabels: {
-      'image2_low': 'image2_low（低画质）',
-      'image2_medium': 'image2_medium（中画质）',
-      'image2_high': 'image2_high（高画质）',
-    },
-    supportsAspectRatio: true,
-    aspectRatio: { options: ['1:1', '3:2', '2:3', '3:4', '4:3', '16:9', '9:16', '21:9', '9:21'], default: '1:1' },
-    versionCapabilities: {
-      'image2_low': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
-      'image2_medium': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
-      'image2_high': { maxImages: 3, allowedFormats: ['jpeg', 'jpg', 'png', 'webp'], resolution: { options: ['1K', '2K', '4K'], default: '1K' } },
-    },
-  },
-};
 
 const RequiredMark = () => (
   <span style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>
@@ -145,18 +56,20 @@ const ImageGenForm = () => {
   const [taskStatus, setTaskStatus] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
   const [selectedModel, setSelectedModel] = useState('GEM');
-  const [selectedVersion, setSelectedVersion] = useState('2.5');
+  const [selectedVersion, setSelectedVersion] = useState('3.1-lite');
+  const [maskMode, setMaskMode] = useState(false);
 
   const modelCfg = IMAGE_MODEL_CONFIG[selectedModel] || IMAGE_MODEL_CONFIG.GEM;
-  const vCap = modelCfg.versionCapabilities?.[selectedVersion] || {};
+  const vCap = getImageVersionCaps(selectedModel, selectedVersion);
   const maxImages = vCap.maxImages || 1;
+  const resolutionCfg = getImageResolutionConfig(selectedModel, selectedVersion);
+  const aspectCfg = getImageAspectRatioConfig(selectedModel, selectedVersion);
+  const outputImageCountCfg = vCap.outputImageCount;
+  const supportsMask = !!vCap.supportsMask;
 
   // 允许的图片格式（默认 jpeg/png，部分模型加 webp）
   const allowedFormats = vCap.allowedFormats || ['jpeg', 'jpg', 'png'];
   const acceptAttr = allowedFormats.map((f) => `image/${f}`).join(',');
-
-  // 当前版本分辨率配置（部分版本不支持）
-  const resolutionCfg = vCap.resolution || null;
 
   // 上传前校验
   const beforeUpload = (file) => {
@@ -249,44 +162,53 @@ const ImageGenForm = () => {
       message.warning('请输入 Prompt！');
       return;
     }
+    if (maskMode && uploadedFiles.length === 0) {
+      message.error('蒙版模式需要先上传图片（第一张作为蒙版）！');
+      return;
+    }
+    if (maskMode && uploadedFiles.length < 2) {
+      message.error('蒙版模式建议上传 2 张图：第一张为蒙版，第二张为待编辑原图！');
+      return;
+    }
+
+    let extInfo;
+    try {
+      extInfo = normalizeExtInfo(values.extInfo);
+    } catch (error) {
+      message.error(error.message);
+      return;
+    }
 
     try {
       setLoading(true);
       message.loading({ content: '正在创建图片生成任务...', key: 'img-submit' });
 
-      let fileInfos = undefined;
-      if (uploadedFiles.length > 0) {
-        const toSend = uploadedFiles.slice(0, maxImages);
-        fileInfos = toSend.map((f) => ({
-          Type: 'Url',
-          Url: f.url,
-          // 图片生成接口不支持 Category 字段，不传
-        }));
-      }
+      const caps = getImageVersionCaps(values.modelName, values.modelVersion);
+      const outputConfig = buildImageOutputConfig({
+        resolution: values.resolution,
+        aspectRatio: values.aspectRatio,
+        storageMode: values.storageMode,
+        personGeneration: values.personGeneration,
+        inputComplianceCheck: values.inputComplianceCheck,
+        outputComplianceCheck: values.outputComplianceCheck,
+        outputImageCount: values.outputImageCount,
+        outputFormat: values.outputFormat,
+        logoAdd: values.logoAdd,
+        supportsAspectRatio: caps.supportsAspectRatio,
+      });
 
-      const outputConfig = {
-        StorageMode: values.storageMode || 'Permanent',
-        PersonGeneration: values.personGeneration || 'AllowAdult',
-        InputComplianceCheck: values.inputComplianceCheck || 'Disabled',
-        OutputComplianceCheck: values.outputComplianceCheck || 'Disabled',
-      };
-      if (values.aspectRatio && modelCfg.supportsAspectRatio) {
-        outputConfig.AspectRatio = values.aspectRatio;
-      }
-      if (values.resolution && resolutionCfg) {
-        outputConfig.Resolution = values.resolution;
-      }
-
-      const taskData = {
-        ModelName: values.modelName,
-        ModelVersion: values.modelVersion,
-        ...(fileInfos ? { FileInfos: fileInfos } : {}),
-        Prompt: values.prompt,
-        ...(values.negativePrompt ? { NegativePrompt: values.negativePrompt } : {}),
-        EnhancePrompt: values.enhancePrompt || 'Enabled',
-        OutputConfig: outputConfig,
-        InputRegion: values.inputRegion || 'Mainland',
-      };
+      const taskData = buildImageTaskData({
+        modelName: values.modelName,
+        version: values.modelVersion,
+        files: uploadedFiles.slice(0, maxImages),
+        maskMode: supportsMask && maskMode,
+        prompt: values.prompt,
+        negativePrompt: values.negativePrompt,
+        enhancePrompt: values.enhancePrompt,
+        outputConfig,
+        inputRegion: values.inputRegion,
+        extInfo,
+      });
 
       const result = await createAigcImageTask(taskData);
       message.success({ content: '任务创建成功！', key: 'img-submit' });
@@ -311,8 +233,21 @@ const ImageGenForm = () => {
     setFileList([]);
     setTaskId(null);
     setTaskStatus(null);
+    setMaskMode(false);
     setSelectedModel('GEM');
-    setSelectedVersion('2.5');
+    setSelectedVersion('3.1-lite');
+  };
+
+  const getVersionFormValues = (modelName, version) => {
+    const caps = getImageVersionCaps(modelName, version);
+    const resCfg = getImageResolutionConfig(modelName, version);
+    return {
+      modelVersion: version,
+      aspectRatio: caps.aspectRatio?.default || undefined,
+      resolution: resCfg?.default || undefined,
+      outputImageCount: caps.outputImageCount ? 1 : undefined,
+      outputFormat: undefined,
+    };
   };
 
   // 切换模型
@@ -323,12 +258,8 @@ const ImageGenForm = () => {
     setSelectedVersion(newVersion);
     setUploadedFiles([]);
     setFileList([]);
-    const newVCap = cfg.versionCapabilities?.[newVersion] || {};
-    form.setFieldsValue({
-      modelVersion: newVersion,
-      aspectRatio: cfg.aspectRatio?.default || undefined,
-      resolution: newVCap.resolution?.default || undefined,
-    });
+    setMaskMode(false);
+    form.setFieldsValue(getVersionFormValues(value, newVersion));
   };
 
   // 切换版本
@@ -336,11 +267,8 @@ const ImageGenForm = () => {
     setSelectedVersion(value);
     setUploadedFiles([]);
     setFileList([]);
-    const cfg = IMAGE_MODEL_CONFIG[selectedModel];
-    const newVCap = cfg.versionCapabilities?.[value] || {};
-    form.setFieldsValue({
-      resolution: newVCap.resolution?.default || undefined,
-    });
+    setMaskMode(false);
+    form.setFieldsValue(getVersionFormValues(selectedModel, value));
   };
 
   // 渲染任务状态
@@ -363,7 +291,7 @@ const ImageGenForm = () => {
 
     if (Status === 'FINISH' && AigcImageTask) {
       const isSuccess = AigcImageTask.ErrCode === 0;
-      const imageUrl = AigcImageTask.Output?.FileInfos?.[0]?.FileUrl;
+      const imageUrls = (AigcImageTask.Output?.FileInfos || []).map((f) => f.FileUrl).filter(Boolean);
       const errorMsg = AigcImageTask.Message || '未知错误';
 
       if (!isSuccess) {
@@ -394,18 +322,22 @@ const ImageGenForm = () => {
             title="图片生成成功！"
             subTitle={`任务ID: ${taskId}`}
             extra={[
-              imageUrl && (
+              imageUrls.length > 0 && (
                 <div key="image" style={{ textAlign: 'center', marginTop: 16 }}>
-                  <img
-                    src={imageUrl}
-                    alt="生成结果"
-                    style={{ maxWidth: '100%', maxHeight: 600, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
-                  />
-                  <div style={{ marginTop: 12 }}>
-                    <Button type="primary" href={imageUrl} target="_blank">
-                      查看原图 / 下载
-                    </Button>
-                  </div>
+                  {imageUrls.map((url) => (
+                    <div key={url} style={{ marginBottom: 16 }}>
+                      <img
+                        src={url}
+                        alt="生成结果"
+                        style={{ maxWidth: '100%', maxHeight: 600, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
+                      />
+                      <div style={{ marginTop: 8 }}>
+                        <Button type="primary" href={url} target="_blank">
+                          查看原图 / 下载
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ),
               <Button key="new" onClick={handleReset} style={{ marginTop: 8 }}>生成新图片</Button>,
@@ -469,8 +401,7 @@ const ImageGenForm = () => {
           onFinish={handleSubmit}
           initialValues={{
             modelName: 'GEM',
-            modelVersion: '2.5',
-            aspectRatio: '1:1',
+            modelVersion: '3.1-lite',
             resolution: '1K',
             storageMode: 'Permanent',
             personGeneration: 'AllowAdult',
@@ -478,6 +409,9 @@ const ImageGenForm = () => {
             outputComplianceCheck: 'Disabled',
             enhancePrompt: 'Enabled',
             inputRegion: 'Mainland',
+            outputImageCount: undefined,
+            outputFormat: undefined,
+            logoAdd: '',
           }}
         >
           <div className="form-two-col">
@@ -515,6 +449,12 @@ const ImageGenForm = () => {
                   </Select>
                 </Form.Item>
               </div>
+
+              {vCap.note && (
+                <div style={{ padding: '6px 10px', background: '#f6f8fa', borderRadius: 6, color: '#888', fontSize: 12, marginBottom: 12 }}>
+                  {vCap.note}
+                </div>
+              )}
 
               {/* 参考图上传 */}
               <div className="section-title" style={{ marginTop: 8 }}>参考图（可选）</div>
@@ -554,6 +494,25 @@ const ImageGenForm = () => {
                 </div>
               </Form.Item>
 
+              {supportsMask && (
+                <Form.Item
+                  label={
+                    <span>
+                      图片编辑蒙版&nbsp;
+                      <Tooltip title="开启后第一张参考图将作为蒙版（FileInfos.ReferenceType=mask），第二张为待编辑原图">
+                        <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                      </Tooltip>
+                    </span>
+                  }
+                  style={{ marginBottom: 12 }}
+                >
+                  <Radio.Group size="small" value={maskMode} onChange={(e) => setMaskMode(e.target.value)}>
+                    <Radio.Button value={false}>关闭</Radio.Button>
+                    <Radio.Button value={true}>第一张为蒙版</Radio.Button>
+                  </Radio.Group>
+                </Form.Item>
+              )}
+
               {/* Prompt */}
               <div className="section-title" style={{ marginTop: 8 }}>描述内容</div>
               <Form.Item
@@ -562,7 +521,7 @@ const ImageGenForm = () => {
                 rules={[{ required: true, message: '请输入 Prompt！' }]}
                 style={{ marginBottom: 12 }}
               >
-                <Input.TextArea rows={5} placeholder="请详细描述您想要生成的图片内容..." maxLength={1000} showCount />
+                <Input.TextArea rows={5} placeholder="请详细描述您想要生成的图片内容..." maxLength={2000} showCount />
               </Form.Item>
 
               <Form.Item
@@ -603,25 +562,64 @@ const ImageGenForm = () => {
               )}
 
               {/* 宽高比 */}
-              {modelCfg.supportsAspectRatio && modelCfg.aspectRatio && (
+              {aspectCfg && (
                 <Form.Item
                   label={<span>宽高比</span>}
                   name="aspectRatio"
                   style={{ marginBottom: 16 }}
                 >
                   <Radio.Group>
-                    {modelCfg.aspectRatio.options.map((r) => (
+                    {aspectCfg.options.map((r) => (
                       <Radio.Button key={r} value={r}>
-                        {r}{r === modelCfg.aspectRatio.default ? ' ✦' : ''}
+                        {r}{r === aspectCfg.default ? ' ✦' : ''}
                       </Radio.Button>
                     ))}
                   </Radio.Group>
                 </Form.Item>
               )}
-              {!modelCfg.supportsAspectRatio && (
+              {!aspectCfg && (
                 <div style={{ padding: '6px 10px', background: '#f6f8fa', borderRadius: 6, color: '#999', fontSize: 13, marginBottom: 16 }}>
                   当前模型不支持宽高比设置
                 </div>
+              )}
+
+              {/* 生成图片张数 */}
+              {outputImageCountCfg && (
+                <Form.Item
+                  label={
+                    <span>
+                      生成张数&nbsp;
+                      <Tooltip title={`可选 1-${outputImageCountCfg.max} 张，默认 1 张`}>
+                        <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                      </Tooltip>
+                    </span>
+                  }
+                  name="outputImageCount"
+                  style={{ marginBottom: 16 }}
+                >
+                  <InputNumber min={outputImageCountCfg.min} max={outputImageCountCfg.max} step={1} style={{ width: 120 }} />
+                </Form.Item>
+              )}
+
+              {/* 输出格式 */}
+              {vCap.supportsOutputFormat && (
+                <Form.Item
+                  label={
+                    <span>
+                      输出格式&nbsp;
+                      <Tooltip title="不指定则跟随模型默认值">
+                        <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                      </Tooltip>
+                    </span>
+                  }
+                  name="outputFormat"
+                  style={{ marginBottom: 16 }}
+                >
+                  <Select allowClear placeholder="默认（跟随模型）" style={{ width: 180 }}>
+                    <Select.Option value="png">png</Select.Option>
+                    <Select.Option value="jpeg">jpeg</Select.Option>
+                  </Select>
+                </Form.Item>
               )}
 
               {/* 高级选项（折叠） */}
@@ -700,6 +698,46 @@ const ImageGenForm = () => {
                           <Radio.Button value="Disabled">关闭</Radio.Button>
                           <Radio.Button value="Enabled">开启</Radio.Button>
                         </Radio.Group>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            图标水印&nbsp;
+                            <Tooltip title="输出图片是否添加图标水印（LogoAdd）">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="logoAdd"
+                      >
+                        <Radio.Group size="small">
+                          <Radio.Button value="">默认</Radio.Button>
+                          <Radio.Button value="Enabled">开启</Radio.Button>
+                          <Radio.Button value="Disabled">关闭</Radio.Button>
+                        </Radio.Group>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            扩展参数 ExtInfo&nbsp;
+                            <Tooltip
+                              title={
+                                '模型特殊参数 JSON，例如：{"AdditionalParameters":"{\\"size\\":\\"auto\\"}"}、{"AdditionalParameters":"{\\"background\\":\\"transparent\\"}"}、扩图比例等'
+                              }
+                            >
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="extInfo"
+                      >
+                        <Input.TextArea
+                          rows={2}
+                          size="small"
+                          placeholder='例：{"AdditionalParameters":"{\"size\":\"2000x1104\"}"}'
+                        />
                       </Form.Item>
 
                       <Form.Item

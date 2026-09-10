@@ -158,29 +158,33 @@ export const uploadMultipleFiles = async (files, onProgress) => {
   
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    
+    const loadedBefore = totalLoaded;
+    const currentIndex = i + 1;
+
     const result = await uploadFileToCOS(file, (progress) => {
-      const currentLoaded = totalLoaded + progress.loaded;
+      const currentLoaded = loadedBefore + progress.loaded;
       const totalPercent = Math.round((currentLoaded / totalSize) * 100);
-      
+
       if (onProgress) {
         onProgress({
-          current: i + 1,
+          current: currentIndex,
           total: files.length,
           percent: totalPercent,
           currentFile: file.name,
         });
       }
     });
-    
+
     results.push(result);
     totalLoaded += file.size;
   }
-  
+
   return results;
 };
 
-export default {
+const cosService = {
   uploadFileToCOS,
   uploadMultipleFiles,
 };
+
+export default cosService;

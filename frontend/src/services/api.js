@@ -143,4 +143,45 @@ export const queryImageTaskStatus = async (taskId) => {
   }
 };
 
+/**
+ * 创建 AIGC 音频生成任务
+ * @param {Object} taskData - 任务数据
+ * @returns {Promise<{TaskId: string}>}
+ */
+export const createAigcAudioTask = async (taskData) => {
+  try {
+    const response = await apiClient.post('/audio/create', taskData);
+
+    if (!response.success) {
+      throw new Error(response.error || '任务创建失败');
+    }
+
+    return {
+      TaskId: response.data.taskId,
+      RequestId: response.data.requestId,
+    };
+  } catch (error) {
+    throw new Error(`创建音频任务失败: ${error.message}`);
+  }
+};
+
+/**
+ * 查询音频任务状态
+ * @param {string} taskId - 任务 ID
+ * @returns {Promise<Object>}
+ */
+export const queryAudioTaskStatus = async (taskId) => {
+  try {
+    const response = await apiClient.get(`/audio/status/${taskId}`);
+
+    if (!response.success) {
+      throw new Error(response.error || '查询失败');
+    }
+
+    return response.data;
+  } catch (error) {
+    throw new Error(`查询音频任务状态失败: ${error.message}`);
+  }
+};
+
 export default apiClient;

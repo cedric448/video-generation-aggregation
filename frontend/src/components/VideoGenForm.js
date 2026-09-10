@@ -29,311 +29,136 @@ import {
 } from '@ant-design/icons';
 import { createAigcVideoTask, queryTaskStatus } from '../services/api';
 import { uploadFileToCOS } from '../services/cosService';
+import {
+  VIDEO_MODEL_CONFIG,
+  getVideoVersionCaps,
+  getVideoResolutionConfig,
+  getVideoDurationConfig,
+  getVideoAspectRatioConfig,
+  buildVideoOutputConfig,
+  buildVideoTaskData,
+  parseSubjectInfos,
+  parseFileTexts,
+  normalizeExtInfo,
+} from '../config/videoModels';
 import './VideoGenForm.css';
 
 // =====================================================================
-// 模型能力配置表（基于腾讯云 VOD SDK vod_models.d.ts）
+// 模型能力配置见 src/config/videoModels.js（依据 VOD AIGC 接入指南）
 // =====================================================================
-const MODEL_CONFIG = {
-  Hailuo: {
-    label: '海螺 (Hailuo)',
-    versions: ['2.3-fast', '2.3', '02'],
-    defaultVersion: '2.3-fast',
-    supportsImageInput: true,   // 支持图片作为首帧输入
-    supportsLastFrame: false,   // 不支持尾帧
-    supportsAspectRatio: false, // 不支持宽高比设置
-    supportsAudio: false,
-    resolution: { options: ['768P', '1080P'], default: '768P' },
-    duration: { options: [6, 10], default: 6, unit: '秒' },
-  },
-  Kling: {
-    label: '可灵 (Kling)',
-    versions: ['3.0-Omni', '3.0', '2.6', '2.5', '2.1', '2.0', '1.6', 'O1'],
-    defaultVersion: '3.0-Omni',
-    supportsImageInput: true,
-    supportsLastFrame: true,    // 2.6 版仅支持首尾帧（且只能无声）
-    supportsAspectRatio: true,
-    supportsAudio: true,        // 支持有声/无声（AudioGeneration）
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [5, 10], default: 5, unit: '秒' },
-    aspectRatio: { options: ['16:9', '9:16', '1:1'], default: '16:9', note: '仅文生视频时可用' },
-    sceneTypes: [
-      { value: '', label: '默认' },
-      { value: 'motion_control', label: '动作控制 (motion_control)' },
-      { value: 'avatar_i2v', label: '数字人 (avatar_i2v)' },
-      { value: 'lip_sync', label: '对口型 (lip_sync)' },
-    ],
-    // 版本级别的特殊限制
-    versionCapabilities: {
-      '2.6': { supportsLastFrame: true, audioWithLastFrame: false }, // 2.6 首尾帧时只能无声
-      '3.0': { supportsLastFrame: false, resolution: { options: ['720P', '1080P', '4K'], default: '720P' } },
-      '3.0-Omni': { supportsLastFrame: false, resolution: { options: ['720P', '1080P', '4K'], default: '720P' } },
-      '2.5': { supportsLastFrame: false },
-      '2.1': { supportsLastFrame: true },
-      '2.0': { supportsLastFrame: false },
-      '1.6': { supportsLastFrame: false },
-      'O1': { supportsLastFrame: false },
-    },
-  },
-  Jimeng: {
-    label: '即梦 (Jimeng)',
-    versions: ['3.0pro'],
-    defaultVersion: '3.0pro',
-    supportsImageInput: true,
-    supportsLastFrame: false,
-    supportsAspectRatio: false,
-    supportsAudio: false,
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [], default: null, unit: '秒', note: '由模型决定' },
-  },
-  Vidu: {
-    label: 'Vidu',
-    versions: ['q3-pro', 'q3-mix', 'q2', 'q2-pro', 'q2-turbo', 'q3-turbo'],
-    defaultVersion: 'q3-pro',
-    supportsImageInput: true,
-    supportsLastFrame: true,    // q2-pro / q2-turbo / q3-turbo 支持；q3-pro / q3-mix 不支持
-    supportsAspectRatio: true,
-    supportsAudio: true,
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [], default: 5, min: 1, max: 10, unit: '秒', freeInput: true },
-    aspectRatio: {
-      options: ['16:9', '9:16', '4:3', '3:4', '1:1'],
-      default: '16:9',
-      note: '4:3 / 3:4 仅 q2 版本支持',
-    },
-    sceneTypes: [
-      { value: '', label: '默认' },
-      { value: 'template_effect', label: '特效模板 (template_effect)' },
-    ],
-    // 版本级别的特殊限制
-    versionCapabilities: {
-      'q3-pro': { supportsLastFrame: false, supportsMultiImage: false, textAndImageOnly: true },
-      'q3-mix': { supportsLastFrame: false, supportsMultiImage: false, textAndImageOnly: true }, // 暂不支持主体库
-      'q2': { supportsLastFrame: false, supportsMultiImage: true, maxImages: 7 },
-      'q2-pro': { supportsLastFrame: true, supportsMultiImage: false },
-      'q2-turbo': { supportsLastFrame: true, supportsMultiImage: false },
-      'q3-turbo': { supportsLastFrame: true, supportsMultiImage: false },
-    },
-  },
-  GV: {
-    label: 'Google Veo (GV)',
-    versions: ['3.1', '3.1-fast'],
-    defaultVersion: '3.1-fast',
-    supportsImageInput: true,
-    supportsLastFrame: true,    // 多图输入时不可使用
-    supportsAspectRatio: true,
-    supportsAudio: true,
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [8], default: 8, unit: '秒' },
-    aspectRatio: { options: ['16:9', '9:16'], default: '16:9' },
-  },
-  Hunyuan: {
-    label: '混元 (Hunyuan)',
-    versions: ['1.5'],
-    defaultVersion: '1.5',
-    supportsImageInput: true,
-    supportsLastFrame: false,
-    supportsAspectRatio: false,
-    supportsAudio: false,
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [], default: null, unit: '秒', note: '由模型决定' },
-  },
-  Mingmou: {
-    label: '明眸 (Mingmou)',
-    versions: ['1.0'],
-    defaultVersion: '1.0',
-    supportsImageInput: true,
-    supportsLastFrame: false,
-    supportsAspectRatio: false,
-    supportsAudio: false,
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [], default: null, unit: '秒', note: '由模型决定' },
-  },
-  Seedance: {
-    label: '豆包 (Seedance)',
-    versions: ['1.5-pro', '1.0-pro', '1.0-pro-fast', '1.0-lite-i2v'],
-    defaultVersion: '1.5-pro',
-    supportsImageInput: true,
-    supportsLastFrame: false,
-    supportsAspectRatio: false,
-    supportsAudio: true,        // 仅 1.5-pro 支持有声/无声
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [], default: null, unit: '秒', note: '由模型决定' },
-    // 版本级别的特殊限制
-    versionCapabilities: {
-      '1.5-pro': { supportsAudio: true, maxResolution: '720P' }, // 不支持 1080P
-      '1.0-pro': { supportsAudio: false },
-      '1.0-pro-fast': { supportsAudio: false },
-      '1.0-lite-i2v': { supportsAudio: false },
-    },
-  },
-  OS: {
-    label: 'OpenAI Sora (OS)',
-    versions: ['2.0'],
-    defaultVersion: '2.0',
-    supportsImageInput: true,
-    supportsLastFrame: false,
-    supportsAspectRatio: true,
-    supportsAudio: false,      // UI 不显示开关；提交时固定 AudioGeneration: 'Enabled'
-    audioAlwaysEnabled: true, // OS 始终开启音频
-    resolution: { options: ['720P'], default: '720P' },
-    duration: { options: [4, 8, 12], default: 8, unit: '秒' },
-    aspectRatio: { options: ['16:9', '9:16'], default: '16:9', note: '仅文生视频时可用' },
-  },
-  Pixverse: {
-    label: 'Pixverse (爱诗)',
-    versions: ['V5.6', 'V6.0', 'C1'],
-    defaultVersion: 'V5.6',
-    supportsImageInput: true,
-    supportsLastFrame: false,
-    supportsAspectRatio: true,
-    supportsAudio: true,
-    resolution: { options: ['720P', '1080P'], default: '720P' },
-    duration: { options: [5, 8, 10], default: 5, unit: '秒' },
-    aspectRatio: { options: ['16:9', '9:16', '1:1', '4:3', '3:4'], default: '16:9' },
-    versionCapabilities: {
-      'V5.6': { supportsLastFrame: false },
-      'V6.0': { supportsLastFrame: false },
-      'C1': { supportsLastFrame: false },
-    },
-  },
-  H2: {
-    label: '快乐马 (H2)',
-    versions: ['1.0'],
-    defaultVersion: '1.0',
-    supportsImageInput: true,   // 支持首帧生、参考生（1-9 张）
-    supportsLastFrame: false,
-    supportsAspectRatio: true,
-    supportsAudio: true,
-    resolution: { options: ['720P', '1080P', '2K', '4K'], default: '720P' },
-    duration: { options: [], default: 5, min: 3, max: 15, unit: '秒', freeInput: true },
-    aspectRatio: { options: ['16:9', '9:16', '1:1', '3:4', '4:3'], default: '16:9' },
-    // H2 支持多图参考（1-9 张）
-    versionCapabilities: {
-      '1.0': { supportsLastFrame: false, supportsMultiImage: true, maxImages: 9 },
-    },
-  },
-};
-
-// 获取当前版本实际能力（合并模型级 + 版本级覆盖）
-const getVersionCaps = (modelName, version) => {
-  const modelCfg = MODEL_CONFIG[modelName];
-  if (!modelCfg) return {};
-  const base = {
-    supportsLastFrame: modelCfg.supportsLastFrame,
-    supportsAudio: modelCfg.supportsAudio,
-  };
-  const vCap = modelCfg.versionCapabilities?.[version] || {};
-  return { ...base, ...vCap };
-};
 
 const RequiredMark = () => (
   <span style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>
 );
 
+const getFileKind = (file) => {
+  if (file.type?.startsWith('image/')) return 'image';
+  if (file.type?.startsWith('video/')) return 'video';
+  if (file.type?.startsWith('audio/')) return 'audio';
+  return null;
+};
+
 const VideoGenForm = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState([]);      // 首帧/多图 已上传
-  const [fileList, setFileList] = useState([]);                // 首帧/多图 antd fileList
+  const [uploadedFiles, setUploadedFiles] = useState([]);      // 首帧/参考素材 已上传
+  const [fileList, setFileList] = useState([]);                // 首帧/参考素材 antd fileList
   const [lastFrameFile, setLastFrameFile] = useState(null);   // 尾帧 已上传文件
   const [lastFrameFileList, setLastFrameFileList] = useState([]); // 尾帧 antd fileList
   const [taskId, setTaskId] = useState(null);
   const [taskStatus, setTaskStatus] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
   const [selectedModel, setSelectedModel] = useState('Hailuo');
-  const [selectedVersion, setSelectedVersion] = useState('2.3-fast');
+  const [selectedVersion, setSelectedVersion] = useState('H3-Max');
 
-  const modelCfg = MODEL_CONFIG[selectedModel] || MODEL_CONFIG.Hailuo;
-  const versionCaps = getVersionCaps(selectedModel, selectedVersion);
-
-  // Seedance 1.5-pro 不支持 1080P，Kling 部分版本支持 4K，动态计算分辨率选项
-  const resoliutionOptions = (() => {
-    if (selectedModel === 'Seedance') {
-      const cap = modelCfg.versionCapabilities?.[selectedVersion];
-      if (cap?.maxResolution === '720P') {
-        return ['720P'];
-      }
-    }
-    // 版本级别分辨率覆盖（如 Kling 3.0 / 3.0-Omni 支持 4K）
-    const vCap = modelCfg.versionCapabilities?.[selectedVersion];
-    if (vCap?.resolution) {
-      return vCap.resolution.options;
-    }
-    return modelCfg.resolution.options;
-  })();
+  const modelCfg = VIDEO_MODEL_CONFIG[selectedModel] || VIDEO_MODEL_CONFIG.Hailuo;
+  const versionCaps = getVideoVersionCaps(selectedModel, selectedVersion);
+  const resolutionCfg = getVideoResolutionConfig(selectedModel, selectedVersion);
+  const durationCfg = getVideoDurationConfig(selectedModel, selectedVersion);
+  const aspectCfg = getVideoAspectRatioConfig(selectedModel, selectedVersion);
+  const maxImages = versionCaps.maxImages;
+  const maxVideos = versionCaps.maxVideos;
+  const maxAudios = versionCaps.maxAudios;
+  const maxTotalFiles = maxImages + maxVideos + maxAudios;
+  const uploadedImages = uploadedFiles.filter((f) => f.type === 'image').length;
+  const uploadedVideos = uploadedFiles.filter((f) => f.type === 'video').length;
+  const uploadedAudios = uploadedFiles.filter((f) => f.type === 'audio').length;
 
   // 当前版本是否支持首尾帧
   const canLastFrame = versionCaps.supportsLastFrame;
   // 当前版本是否支持音频
   const canAudio = versionCaps.supportsAudio ?? modelCfg.supportsAudio;
 
-  // GV: 多图输入时禁用首尾帧
-  const gvMultiImage = selectedModel === 'GV' && uploadedFiles.length > 1;
-  const showLastFrame = canLastFrame && !gvMultiImage;
+  // 素材中有视频/音频，或已上传多张图时，不走首尾帧模式
+  const hasNonImageFile = uploadedFiles.some((f) => f.type !== 'image');
+  const showLastFrame = canLastFrame && uploadedFiles.length <= 1 && !hasNonImageFile;
 
-  // Kling 2.6 首尾帧时强制无声（有尾帧上传时才算首尾帧模式）
-  const kling26WithLastFrame =
-    selectedModel === 'Kling' &&
-    selectedVersion === '2.6' &&
-    lastFrameFile !== null;
+  // 首尾帧模式下（有尾帧）是否强制无声（如 Kling 2.6）
+  const lastFrameNoAudio = canLastFrame && versionCaps.audioWithLastFrame === false && lastFrameFile !== null;
 
-  // 动态计算最大上传数量
-  const maxFiles = (() => {
-    // 支持首尾帧的模式下，首帧只能 1 张
-    if (canLastFrame && !gvMultiImage) return 1;
-    // 版本级别 maxImages 覆盖（Vidu q2、H2 等多图模式）
-    const vCap = modelCfg.versionCapabilities?.[selectedVersion];
-    if (vCap?.maxImages) return vCap.maxImages;
-    // GV 多图最多 3 张
-    if (selectedModel === 'GV') return 3;
-    // 其他模型默认 1 张
-    return 1;
-  })();
-
-  // 文件上传前校验（首帧/多图）
+  // 上传单个类型的上限校验
   const beforeUpload = (file) => {
-    const isImage = file.type.startsWith('image/');
-    const isVideo = file.type.startsWith('video/');
-    if (!isImage && !isVideo) {
-      message.error('只能上传图片或视频文件！');
+    const kind = getFileKind(file);
+    if (!kind) {
+      message.error('只能上传图片、视频或音频文件！');
       return Upload.LIST_IGNORE;
     }
-    if (isImage) {
-      // 图片限制：仅支持 jpeg/png
-      const allowed = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (kind === 'image') {
+      const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       if (!allowed.includes(file.type.toLowerCase())) {
-        message.error('图片仅支持 JPEG / PNG 格式！');
+        message.error('图片仅支持 JPEG / PNG / WEBP 格式！');
         return Upload.LIST_IGNORE;
       }
-      // 图片限制：最大 10MB
       if (file.size / 1024 / 1024 > 10) {
         message.error('图片大小不能超过 10MB！');
         return Upload.LIST_IGNORE;
       }
+      if (uploadedImages >= maxImages) {
+        message.error(`当前模式最多上传 ${maxImages} 张参考图片！`);
+        return Upload.LIST_IGNORE;
+      }
     }
-    if (isVideo && file.size / 1024 / 1024 > 100) {
-      message.error('视频大小不能超过 100MB！');
-      return Upload.LIST_IGNORE;
+    if (kind === 'video') {
+      if (maxVideos <= 0) {
+        message.error('当前模型不支持参考视频！');
+        return Upload.LIST_IGNORE;
+      }
+      if (file.size / 1024 / 1024 > 100) {
+        message.error('视频大小不能超过 100MB！');
+        return Upload.LIST_IGNORE;
+      }
+      if (uploadedVideos >= maxVideos) {
+        message.error(`当前模式最多上传 ${maxVideos} 段参考视频！`);
+        return Upload.LIST_IGNORE;
+      }
     }
-    // 检查上传数量上限
-    if (uploadedFiles.length >= maxFiles) {
-      message.error(`当前模式最多上传 ${maxFiles} 个文件！`);
-      return Upload.LIST_IGNORE;
+    if (kind === 'audio') {
+      if (maxAudios <= 0) {
+        message.error('当前模型不支持参考音频！');
+        return Upload.LIST_IGNORE;
+      }
+      if (file.size / 1024 / 1024 > 15) {
+        message.error('音频大小不能超过 15MB！');
+        return Upload.LIST_IGNORE;
+      }
+      if (uploadedAudios >= maxAudios) {
+        message.error(`当前模式最多上传 ${maxAudios} 段参考音频！`);
+        return Upload.LIST_IGNORE;
+      }
     }
     return true;
   };
 
-  // 尾帧上传前校验（只允许 jpeg/png，最大 10MB，只能 1 张）
+  // 尾帧上传前校验（只允许 jpeg/png/webp，最大 10MB，只能 1 张）
   const beforeUploadLastFrame = (file) => {
     const isImage = file.type.startsWith('image/');
     if (!isImage) {
       message.error('尾帧只能上传图片！');
       return Upload.LIST_IGNORE;
     }
-    const allowed = ['image/jpeg', 'image/jpg', 'image/png'];
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowed.includes(file.type.toLowerCase())) {
-      message.error('尾帧图片仅支持 JPEG / PNG 格式！');
+      message.error('尾帧图片仅支持 JPEG / PNG / WEBP 格式！');
       return Upload.LIST_IGNORE;
     }
     if (file.size / 1024 / 1024 > 10) {
@@ -361,7 +186,7 @@ const VideoGenForm = () => {
         name: file.name,
         url: result.url,
         key: result.key,
-        type: file.type.startsWith('image/') ? 'image' : 'video',
+        type: getFileKind(file) || 'image',
         status: 'done',
       };
       setUploadedFiles((prev) => [...prev, uploadedFile]);
@@ -450,26 +275,20 @@ const VideoGenForm = () => {
 
   // 提交表单
   const handleSubmit = async (values) => {
-    const cfg = MODEL_CONFIG[values.modelName];
-    const vCap = getVersionCaps(values.modelName, values.modelVersion);
-
-    if (cfg.supportsImageInput && uploadedFiles.length === 0) {
-      message.warning('请先上传参考图片或视频！');
-      return;
-    }
     if (!values.prompt || values.prompt.trim() === '') {
       message.warning('请输入 Prompt！');
       return;
     }
 
-    // Kling 2.6 首尾帧只能无声
-    if (
-      values.modelName === 'Kling' &&
-      values.modelVersion === '2.6' &&
-      uploadedFiles.length > 0 &&
-      values.audioGeneration === 'Enabled'
-    ) {
-      message.error('Kling 2.6 使用首尾帧时不支持有声模式，请关闭音频！');
+    // Kling 2.6 等版本：首尾帧模式仅支持无声
+    if (lastFrameNoAudio && values.audioGeneration === 'Enabled') {
+      message.error(`Kling ${values.modelVersion} 使用首尾帧时不支持有声模式，请关闭音频！`);
+      return;
+    }
+
+    // 万相：不支持纯尾帧生成
+    if (values.modelName === 'Wan' && lastFrameFile && uploadedFiles.length === 0) {
+      message.error('Wan 不支持纯尾帧生成，请先上传首帧图片！');
       return;
     }
 
@@ -483,73 +302,73 @@ const VideoGenForm = () => {
       return;
     }
 
+    // Pixverse V5.6：1080P 不支持 10 秒
+    if (
+      values.modelName === 'Pixverse' &&
+      values.modelVersion === 'V5.6' &&
+      values.resolution === '1080P' &&
+      Number(values.duration) === 10
+    ) {
+      message.error('Pixverse V5.6 的 1080P 分辨率不支持 10 秒时长！');
+      return;
+    }
+
+    // SceneType 校验：Kling 数字人场景需要人物图片
+    if (values.sceneType === 'avatar_i2v' && !uploadedFiles.some((f) => f.type === 'image')) {
+      message.error('数字人场景请上传 1 张人物图片！');
+      return;
+    }
+
+    let extInfo;
+    try {
+      extInfo = normalizeExtInfo(values.extInfo);
+    } catch (error) {
+      message.error(error.message);
+      return;
+    }
+
     try {
       setLoading(true);
       message.loading({ content: '正在创建视频生成任务...', key: 'submit' });
 
-      // ── 构建 FileInfos ──
-      // 规则：
-      //   1. 支持首尾帧时，FileInfos 只放 1 张首帧（尾帧走 LastFrameUrl）
-      //   2. Vidu q2 多图：最多 7 张
-      //   3. GV 多图：最多 3 张，不传尾帧
-      //   4. H2 多图：最多 9 张
-      //   5. 其他：最多 1 张
-      // Usage 参数：FirstFrame（首帧）/ Reference（参考帧）
-      let fileInfos = undefined;
-      if (cfg.supportsImageInput && uploadedFiles.length > 0) {
-        // 取前 maxFiles 张（多传按上限截断）
-        const filesToSend = uploadedFiles.slice(0, maxFiles);
-        // 判断是首帧模式还是参考帧模式
-        const isFirstFrameMode = canLastFrame && !gvMultiImage && filesToSend.length === 1;
-        fileInfos = filesToSend.map((f) => ({
-          Type: 'Url',
-          Url: f.url,
-          Category: f.type === 'image' ? 'Image' : 'Video',
-          Usage: isFirstFrameMode ? 'FirstFrame' : 'Reference',
-        }));
-      }
+      const caps = getVideoVersionCaps(values.modelName, values.modelVersion);
+      const supportsAspectRatio = caps.supportsAspectRatio ?? VIDEO_MODEL_CONFIG[values.modelName]?.supportsAspectRatio;
+      const supportsAudio = caps.supportsAudio ?? VIDEO_MODEL_CONFIG[values.modelName]?.supportsAudio;
+      const outputConfig = buildVideoOutputConfig({
+        resolution: values.resolution,
+        duration: values.duration,
+        aspectRatio: values.aspectRatio,
+        storageMode: values.storageMode,
+        personGeneration: values.personGeneration,
+        inputComplianceCheck: values.inputComplianceCheck,
+        outputComplianceCheck: values.outputComplianceCheck,
+        audioGeneration: values.audioGeneration,
+        enhanceSwitch: values.enhanceSwitch,
+        frameInterpolate: values.frameInterpolate,
+        offPeak: values.offPeak,
+        logoAdd: values.logoAdd,
+        supportsAspectRatio,
+        supportsAudio,
+        audioAlwaysEnabled: caps.audioAlwaysEnabled,
+        forceNoAudio: lastFrameNoAudio,
+      });
 
-      // 尾帧 URL（仅支持首尾帧且非 GV 多图时使用）
-      const lastFrameUrl = (showLastFrame && lastFrameFile) ? lastFrameFile.url : undefined;
-
-      // 构建 OutputConfig
-      const outputConfig = {
-        StorageMode: values.storageMode || 'Permanent',
-        Resolution: values.resolution,
-        PersonGeneration: values.personGeneration || 'AllowAdult',
-        InputComplianceCheck: values.inputComplianceCheck || 'Disabled',
-        OutputComplianceCheck: values.outputComplianceCheck || 'Disabled',
-      };
-      if (values.duration) outputConfig.Duration = Number(values.duration);
-      if (values.aspectRatio && cfg.supportsAspectRatio) outputConfig.AspectRatio = values.aspectRatio;
-
-      // 音频：OS 固定 Enabled；其他只有当前版本支持音频时才传
-      const versionSupportsAudio = vCap.supportsAudio ?? cfg.supportsAudio;
-      // Kling 2.6 + 首尾帧时强制无声
-      const forceNoAudio =
-        values.modelName === 'Kling' &&
-        values.modelVersion === '2.6' &&
-        uploadedFiles.length > 0;
-      if (cfg.audioAlwaysEnabled) {
-        outputConfig.AudioGeneration = 'Enabled';
-      } else if (versionSupportsAudio && !forceNoAudio && values.audioGeneration) {
-        outputConfig.AudioGeneration = values.audioGeneration;
-      }
-
-      if (values.enhanceSwitch) outputConfig.EnhanceSwitch = values.enhanceSwitch;
-
-      const taskData = {
-        ModelName: values.modelName,
-        ModelVersion: values.modelVersion,
-        ...(fileInfos ? { FileInfos: fileInfos } : {}),
-        ...(lastFrameUrl ? { LastFrameUrl: lastFrameUrl } : {}),
-        Prompt: values.prompt,
-        ...(values.negativePrompt ? { NegativePrompt: values.negativePrompt } : {}),
-        EnhancePrompt: values.enhancePrompt || 'Enabled',
-        OutputConfig: outputConfig,
-        InputRegion: values.inputRegion || 'Mainland',
-        ...(values.sceneType ? { SceneType: values.sceneType } : {}),
-      };
+      const taskData = buildVideoTaskData({
+        modelName: values.modelName,
+        version: values.modelVersion,
+        files: uploadedFiles,
+        lastFrameFile: showLastFrame ? lastFrameFile : null,
+        prompt: values.prompt,
+        negativePrompt: values.negativePrompt,
+        enhancePrompt: values.enhancePrompt,
+        outputConfig,
+        inputRegion: values.inputRegion,
+        sceneType: values.sceneType,
+        extInfo,
+        subjectInfos: parseSubjectInfos(values.subjectInfos),
+        referenceType: values.referenceType,
+        fileTexts: parseFileTexts(values.fileTexts),
+      });
 
       const result = await createAigcVideoTask(taskData);
       message.success({ content: '任务创建成功！', key: 'submit' });
@@ -577,64 +396,66 @@ const VideoGenForm = () => {
     setTaskId(null);
     setTaskStatus(null);
     setSelectedModel('Hailuo');
-    setSelectedVersion('2.3-fast');
+    setSelectedVersion('H3-Max');
+  };
+
+  // 计算某版本的默认表单字段
+  const getVersionFormValues = (modelName, version) => {
+    const resCfg = getVideoResolutionConfig(modelName, version);
+    const durCfg = getVideoDurationConfig(modelName, version);
+    const ratioCfg = getVideoAspectRatioConfig(modelName, version);
+    return {
+      modelVersion: version,
+      resolution: resCfg.default,
+      duration: durCfg.default,
+      aspectRatio: ratioCfg?.default || undefined,
+      audioGeneration: 'Disabled',
+      sceneType: '',
+    };
   };
 
   // 切换模型时重置相关字段
   const handleModelChange = (value) => {
     setSelectedModel(value);
-    const cfg = MODEL_CONFIG[value];
+    const cfg = VIDEO_MODEL_CONFIG[value];
     const newVersion = cfg.defaultVersion;
     setSelectedVersion(newVersion);
     setUploadedFiles([]);
     setFileList([]);
     setLastFrameFile(null);
     setLastFrameFileList([]);
-
-    // 计算默认分辨率（考虑版本级别覆盖）
-    let defaultResolution = cfg.resolution.default;
-    if (value === 'Seedance') {
-      const vCap = cfg.versionCapabilities?.[newVersion];
-      if (vCap?.maxResolution === '720P') defaultResolution = '720P';
-    }
-    const vCap = cfg.versionCapabilities?.[newVersion];
-    if (vCap?.resolution) defaultResolution = vCap.resolution.default;
-
-    form.setFieldsValue({
-      modelVersion: newVersion,
-      resolution: defaultResolution,
-      duration: cfg.duration.default,
-      aspectRatio: cfg.aspectRatio?.default || undefined,
-      audioGeneration: 'Disabled',
-      sceneType: '',
-    });
+    form.setFieldsValue(getVersionFormValues(value, newVersion));
   };
 
   // 切换版本时更新相关字段
   const handleVersionChange = (value) => {
     setSelectedVersion(value);
-    // 版本切换时清空尾帧
     setLastFrameFile(null);
     setLastFrameFileList([]);
-
-    // Seedance 1.5-pro 不支持 1080P，切换到 1.5-pro 时自动降分辨率
-    if (selectedModel === 'Seedance') {
-      const cap = modelCfg.versionCapabilities?.[value];
-      if (cap?.maxResolution === '720P') {
-        form.setFieldsValue({ resolution: '720P' });
-      }
-    }
-
-    // 版本级别分辨率覆盖（如 Kling 3.0 / 3.0-Omni 支持 4K）
-    const vCap = modelCfg.versionCapabilities?.[value];
-    if (vCap?.resolution) {
-      form.setFieldsValue({ resolution: vCap.resolution.default });
-    }
-
-    // Kling: 不支持首尾帧的版本，若已选有声则不影响（首尾帧 UI 动态隐藏）
-    // 版本切换时重置音频为 Disabled
-    form.setFieldsValue({ audioGeneration: 'Disabled' });
+    form.setFieldsValue(getVersionFormValues(selectedModel, value));
   };
+
+  // 上传区提示
+  const uploadHint = (() => {
+    if (showLastFrame) return '首帧图片：仅 1 张，JPEG/PNG/WEBP，≤10MB';
+    const parts = [];
+    if (maxImages > 0) parts.push(`图片 ≤${maxImages} 张`);
+    if (maxVideos > 0) parts.push(`参考视频 ≤${maxVideos} 段（≤100MB）`);
+    if (maxAudios > 0) parts.push(`参考音频 ≤${maxAudios} 段（≤15MB，不能单独输入）`);
+    if (parts.length === 0) return '当前模型不支持素材输入';
+    return `参考素材：${parts.join('，')}，JPEG/PNG/WEBP`;
+  })();
+
+  const acceptTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    ...(maxVideos > 0 ? ['video/*'] : []),
+    ...(maxAudios > 0 ? ['audio/*'] : []),
+  ].join(',');
+
+  const canAddMoreFiles = uploadedImages < maxImages || uploadedVideos < maxVideos || uploadedAudios < maxAudios;
 
   // 渲染任务状态
   const renderTaskStatus = () => {
@@ -758,7 +579,7 @@ const VideoGenForm = () => {
           onFinish={handleSubmit}
           initialValues={{
             modelName: 'Hailuo',
-            modelVersion: '2.3-fast',
+            modelVersion: 'H3-Max',
             resolution: '768P',
             duration: 6,
             storageMode: 'Permanent',
@@ -769,6 +590,10 @@ const VideoGenForm = () => {
             inputRegion: 'Mainland',
             audioGeneration: 'Disabled',
             sceneType: '',
+            enhanceSwitch: '',
+            frameInterpolate: '',
+            offPeak: '',
+            logoAdd: '',
           }}
         >
           <div className="form-two-col">
@@ -787,7 +612,7 @@ const VideoGenForm = () => {
                   style={{ marginBottom: 16 }}
                 >
                   <Select onChange={handleModelChange}>
-                    {Object.entries(MODEL_CONFIG).map(([key, { label }]) => (
+                    {Object.entries(VIDEO_MODEL_CONFIG).map(([key, { label }]) => (
                       <Select.Option key={key} value={key}>{label}</Select.Option>
                     ))}
                   </Select>
@@ -833,24 +658,14 @@ const VideoGenForm = () => {
 
               {/* 文件上传 */}
               <div className="section-title" style={{ marginTop: 8 }}>素材上传</div>
-              {modelCfg.supportsImageInput ? (
+              {modelCfg.supportsImageInput && maxTotalFiles > 0 ? (
                 <>
                   {/* 首帧 / 主素材 */}
                   <Form.Item
                     label={
                       <span>
-                        {showLastFrame ? '首帧' : '参考文件'} <RequiredMark />&nbsp;
-                        <Tooltip title=                        {(() => {
-                          if (showLastFrame) return '首帧图片：仅 1 张，JPEG/PNG，≤10MB';
-                          if (selectedModel === 'Vidu') {
-                            const vCap = modelCfg.versionCapabilities?.[selectedVersion];
-                            if (vCap?.textAndImageOnly) return 'q3-pro / q3-mix 支持文生和图生（单图），JPEG/PNG，≤10MB';
-                            if (vCap?.maxImages) return `q2 支持多图参考（1-${vCap.maxImages} 张），JPEG/PNG，≤10MB`;
-                          }
-                          if (selectedModel === 'H2') return `H2 支持多图参考（1-9 张），JPEG/PNG，≤10MB`;
-                          if (selectedModel === 'GV') return `最多 ${maxFiles} 张，多图时首尾帧不可用，JPEG/PNG，≤10MB`;
-                          return 'JPEG/PNG 图片（≤10MB）或视频（≤100MB），最多 1 张';
-                        })()}>
+                        {showLastFrame ? '首帧' : '参考文件'} &nbsp;
+                        <Tooltip title={uploadHint}>
                           <QuestionCircleOutlined style={{ color: '#ccc' }} />
                         </Tooltip>
                       </span>
@@ -864,10 +679,10 @@ const VideoGenForm = () => {
                       customRequest={handleUpload}
                       onRemove={handleRemoveFile}
                       onChange={handleFileListChange}
-                      accept="image/jpeg,image/jpg,image/png,video/*"
-                      multiple={maxFiles > 1}
+                      accept={acceptTypes}
+                      multiple={maxTotalFiles > 1}
                     >
-                      {fileList.length >= maxFiles ? null : (
+                      {!canAddMoreFiles ? null : (
                         <div>
                           <UploadOutlined />
                           <div style={{ marginTop: 8, fontSize: 13 }}>上传文件</div>
@@ -875,24 +690,28 @@ const VideoGenForm = () => {
                       )}
                     </Upload>
                     <div className="upload-hint">
-                      已上传 {uploadedFiles.length} / {maxFiles} 个文件（直传 COS）
-                      {maxFiles > 1 && <span>，最多 {maxFiles} 张</span>}
+                      已上传 {uploadedFiles.length} 个文件
+                      {maxImages > 0 && <span>（图片 {uploadedImages}/{maxImages}</span>}
+                      {maxVideos > 0 && <span>，视频 {uploadedVideos}/{maxVideos}</span>}
+                      {maxAudios > 0 && <span>，音频 {uploadedAudios}/{maxAudios}</span>}
+                      {maxImages > 0 && <span>）</span>}
+                      ，直传 COS
                     </div>
-                    {gvMultiImage && (
-                      <div className="upload-warn">⚠ GV 多图模式：首尾帧不可用</div>
+                    {canLastFrame && uploadedFiles.length > 1 && (
+                      <div className="upload-warn">⚠ 已上传多张参考图：当前按参考生模式提交，首尾帧不可用</div>
                     )}
-                    {kling26WithLastFrame && (
-                      <div className="upload-warn">⚠ Kling 2.6 首尾帧模式：仅支持无声</div>
+                    {lastFrameNoAudio && (
+                      <div className="upload-warn">⚠ Kling {selectedVersion} 首尾帧模式：仅支持无声</div>
                     )}
                   </Form.Item>
 
-                  {/* 尾帧（仅首尾帧支持版本且非 GV 多图） */}
+                  {/* 尾帧（仅首尾帧支持版本且非多素材模式） */}
                   {showLastFrame && (
                     <Form.Item
                       label={
                         <span>
                           尾帧&nbsp;
-                          <Tooltip title="尾帧图片：仅 1 张，JPEG/PNG，≤10MB；通过 LastFrameUrl 传入">
+                          <Tooltip title="尾帧图片：仅 1 张，JPEG/PNG/WEBP，≤10MB；通过 FileInfos.Usage=LastFrame 传入">
                             <QuestionCircleOutlined style={{ color: '#ccc' }} />
                           </Tooltip>
                         </span>
@@ -906,7 +725,7 @@ const VideoGenForm = () => {
                         customRequest={handleLastFrameUpload}
                         onRemove={handleRemoveLastFrame}
                         onChange={handleLastFrameFileListChange}
-                        accept="image/jpeg,image/jpg,image/png"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
                         multiple={false}
                       >
                         {lastFrameFileList.length >= 1 ? null : (
@@ -917,7 +736,7 @@ const VideoGenForm = () => {
                         )}
                       </Upload>
                       <div className="upload-hint">
-                        {lastFrameFile ? '尾帧已上传' : '可选，不上传则仅使用首帧'}
+                        {lastFrameFile ? '尾帧已上传' : '可选；仅上传尾帧时按纯尾帧生视频提交'}
                       </div>
                     </Form.Item>
                   )}
@@ -936,7 +755,7 @@ const VideoGenForm = () => {
                 rules={[{ required: true, message: '请输入 Prompt！' }]}
                 style={{ marginBottom: 12 }}
               >
-                <Input.TextArea rows={5} placeholder="请详细描述您想要生成的视频内容..." maxLength={1000} showCount />
+                <Input.TextArea rows={5} placeholder="请详细描述您想要生成的视频内容..." maxLength={2000} showCount />
               </Form.Item>
 
               <Form.Item
@@ -969,21 +788,21 @@ const VideoGenForm = () => {
                 style={{ marginBottom: 16 }}
               >
                 <Radio.Group>
-                  {resoliutionOptions.map((r) => (
+                  {resolutionCfg.options.map((r) => (
                     <Radio.Button key={r} value={r}>
-                      {r}{r === modelCfg.resolution.default ? ' ✦' : ''}
+                      {r}{r === resolutionCfg.default ? ' ✦' : ''}
                     </Radio.Button>
                   ))}
                 </Radio.Group>
               </Form.Item>
 
               {/* 视频时长 */}
-              {(modelCfg.duration.options?.length > 0 || modelCfg.duration.freeInput) && (
+              {(durationCfg.options?.length > 0 || durationCfg.freeInput) && (
                 <Form.Item
                   label={
                     <span>
                       时长（秒）&nbsp;
-                      <Tooltip title={modelCfg.duration.note || `可选值: ${modelCfg.duration.options?.join('、') || `${modelCfg.duration.min}-${modelCfg.duration.max}`} 秒`}>
+                      <Tooltip title={durationCfg.note || `可选值: ${durationCfg.options?.join('、') || `${durationCfg.min}-${durationCfg.max}`} 秒`}>
                         <QuestionCircleOutlined style={{ color: '#ccc' }} />
                       </Tooltip>
                     </span>
@@ -991,19 +810,19 @@ const VideoGenForm = () => {
                   name="duration"
                   style={{ marginBottom: 16 }}
                 >
-                  {modelCfg.duration.freeInput ? (
+                  {durationCfg.freeInput ? (
                     <InputNumber
-                      min={modelCfg.duration.min}
-                      max={modelCfg.duration.max}
+                      min={durationCfg.min}
+                      max={durationCfg.max}
                       step={1}
                       style={{ width: 120 }}
                       addonAfter="秒"
                     />
                   ) : (
                     <Radio.Group>
-                      {modelCfg.duration.options.map((d) => (
+                      {durationCfg.options.map((d) => (
                         <Radio.Button key={d} value={d}>
-                          {d}s{d === modelCfg.duration.default ? ' ✦' : ''}
+                          {d}s{d === durationCfg.default ? ' ✦' : ''}
                         </Radio.Button>
                       ))}
                     </Radio.Group>
@@ -1012,13 +831,13 @@ const VideoGenForm = () => {
               )}
 
               {/* 宽高比 */}
-              {modelCfg.supportsAspectRatio && modelCfg.aspectRatio && (
+              {aspectCfg && (
                 <Form.Item
                   label={
                     <span>
                       宽高比&nbsp;
-                      {modelCfg.aspectRatio.note && (
-                        <Tooltip title={modelCfg.aspectRatio.note}>
+                      {aspectCfg.note && (
+                        <Tooltip title={aspectCfg.note}>
                           <QuestionCircleOutlined style={{ color: '#ccc' }} />
                         </Tooltip>
                       )}
@@ -1028,9 +847,9 @@ const VideoGenForm = () => {
                   style={{ marginBottom: 16 }}
                 >
                   <Radio.Group>
-                    {modelCfg.aspectRatio.options.map((r) => (
+                    {aspectCfg.options.map((r) => (
                       <Radio.Button key={r} value={r}>
-                        {r}{r === modelCfg.aspectRatio.default ? ' ✦' : ''}
+                        {r}{r === aspectCfg.default ? ' ✦' : ''}
                       </Radio.Button>
                     ))}
                   </Radio.Group>
@@ -1043,8 +862,8 @@ const VideoGenForm = () => {
                   label={
                     <span>
                       生成音频&nbsp;
-                      {kling26WithLastFrame && (
-                        <Tooltip title="Kling 2.6 使用首尾帧时仅支持无声模式">
+                      {lastFrameNoAudio && (
+                        <Tooltip title={`Kling ${selectedVersion} 使用首尾帧时仅支持无声模式`}>
                           <QuestionCircleOutlined style={{ color: '#fa8c16' }} />
                         </Tooltip>
                       )}
@@ -1053,7 +872,7 @@ const VideoGenForm = () => {
                   name="audioGeneration"
                   style={{ marginBottom: 16 }}
                 >
-                  <Radio.Group disabled={kling26WithLastFrame}>
+                  <Radio.Group disabled={lastFrameNoAudio}>
                     <Radio.Button value="Disabled">关闭</Radio.Button>
                     <Radio.Button value="Enabled">开启</Radio.Button>
                   </Radio.Group>
@@ -1136,6 +955,142 @@ const VideoGenForm = () => {
                           <Radio.Button value="Disabled">关闭</Radio.Button>
                           <Radio.Button value="Enabled">开启</Radio.Button>
                         </Radio.Group>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            超分输出&nbsp;
+                            <Tooltip title="选择 2K/4K 时默认开启超分；1080P 开启后可让模型直出 720P 再超分到 1080P">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="enhanceSwitch"
+                      >
+                        <Radio.Group size="small">
+                          <Radio.Button value="">默认</Radio.Button>
+                          <Radio.Button value="Enabled">开启</Radio.Button>
+                          <Radio.Button value="Disabled">关闭</Radio.Button>
+                        </Radio.Group>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            智能插帧&nbsp;
+                            <Tooltip title="Vidu 智能插帧（FrameInterpolate）">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="frameInterpolate"
+                      >
+                        <Radio.Group size="small">
+                          <Radio.Button value="">默认</Radio.Button>
+                          <Radio.Button value="Enabled">开启</Radio.Button>
+                          <Radio.Button value="Disabled">关闭</Radio.Button>
+                        </Radio.Group>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            错峰模式&nbsp;
+                            <Tooltip title="错峰任务（OffPeak），价格更低、耗时更长">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="offPeak"
+                      >
+                        <Radio.Group size="small">
+                          <Radio.Button value="">默认</Radio.Button>
+                          <Radio.Button value="Enabled">开启</Radio.Button>
+                          <Radio.Button value="Disabled">关闭</Radio.Button>
+                        </Radio.Group>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            图标水印&nbsp;
+                            <Tooltip title="输出视频是否添加图标水印（LogoAdd）">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="logoAdd"
+                      >
+                        <Radio.Group size="small">
+                          <Radio.Button value="">默认</Radio.Button>
+                          <Radio.Button value="Enabled">开启</Radio.Button>
+                          <Radio.Button value="Disabled">关闭</Radio.Button>
+                        </Radio.Group>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            固定主体 ID&nbsp;
+                            <Tooltip title="Kling / Vidu 固定主体，多个用英文逗号分隔；Vidu 可用 id:名称 格式（Prompt 中以 @名称 引用）">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="subjectInfos"
+                      >
+                        <Input size="small" placeholder="例：858477278396170315,858477602846711835:猫猫" />
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            参考类型&nbsp;
+                            <Tooltip title="FileInfos.ReferenceType：feature 特征参考视频 / base 待编辑视频（Kling 视频编辑）/ base_video 源视频再生成（H3_regen）/ subject 主体 / background 背景（PixVerse）/ asset 素材 / style 风格（GV）">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="referenceType"
+                      >
+                        <Select size="small" allowClear placeholder="默认（不传）">
+                          <Select.Option value="feature">feature（特征参考视频）</Select.Option>
+                          <Select.Option value="base">base（待编辑视频）</Select.Option>
+                          <Select.Option value="base_video">base_video（源视频再生成）</Select.Option>
+                          <Select.Option value="subject">subject（主体）</Select.Option>
+                          <Select.Option value="background">background（背景）</Select.Option>
+                          <Select.Option value="asset">asset（素材）</Select.Option>
+                          <Select.Option value="style">style（风格）</Select.Option>
+                        </Select>
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            素材命名&nbsp;
+                            <Tooltip title="按顺序对应每个参考素材，多个用英文逗号分隔；PixVerse 多主体参考时可在 Prompt 中以 @名称 引用">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="fileTexts"
+                      >
+                        <Input size="small" placeholder="例：小猫,折扇,耳坠" />
+                      </Form.Item>
+
+                      <Form.Item
+                        label={
+                          <span style={{ fontSize: 13, color: '#666' }}>
+                            扩展参数 ExtInfo&nbsp;
+                            <Tooltip title="模型特殊参数 JSON，例如：多镜头 multi_shot / 音色 voice_list / 有状态编辑 PreviousTaskId / 视频再生成 RegenSourceTaskId">
+                              <QuestionCircleOutlined style={{ color: '#ccc' }} />
+                            </Tooltip>
+                          </span>
+                        }
+                        name="extInfo"
+                      >
+                        <Input.TextArea rows={2} size="small" placeholder='例：{"AdditionalParameters":"{\"multi_shot\":true}"}' />
                       </Form.Item>
 
                       <Form.Item
